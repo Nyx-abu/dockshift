@@ -1,0 +1,40 @@
+{
+  "name": "float-dock",
+  "version": "1.0.0",
+  "description": "macOS-style floating AI dock",
+  "main": "electron-main.js",
+  "type": "module",
+  "scripts": {
+    "dev:vite": "vite",
+    "dev:electron": "electron .",
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "electron dist/index.html"
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "vite",
+    "dock",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.43.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "re-resizable": "^6.11.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "xterm": "^5.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^40.6.1",
+    "vite": "^5.0.8"
+  }
+}
