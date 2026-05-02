@@ -1,11 +1,11 @@
 <div align="center">
 
 ```
-  _____ _             _     ____             _    
- |  ___| | ___   __ _| |_  |  _ \  ___   ___| | __
- | |_  | |/ _ \ / _` | __| | | | |/ _ \ / __| |/ /
- |  _| | | (_) | (_| | |_  | |_| | (_) | (__|   < 
- |_|   |_|\___/ \__,_|\__| |____/ \___/ \___|_|\_\
+  ____             _     ____  _     _  __ _   
+ |  _ \  ___   ___| | __/ ___|| |__ (_)/ _| |_ 
+ | | | |/ _ \ / __| |/ /\___ \| '_ \| | |_| __|
+ | |_| | (_) | (__|   <  ___) | | | | |  _| |_ 
+ |____/ \___/ \___|_|\_\|____/|_| |_|_|_|  \__|
 ```
 
 ### A sleek, floating productivity dock for Windows
@@ -28,15 +28,15 @@ AI assistant · Clipboard history · Terminal · Browser · Screenshots · Voice
 <br/>
 
 <div align="center">
-<img src="assets/dock-bar.png" alt="Float Dock Bar" width="85%" />
+<img src="assets/dock-bar.png" alt="DockShift Bar" width="85%" />
 <p><em>The dock bar — minimal, elegant, always within reach</em></p>
 </div>
 
 <br/>
 
-## ✨ What is Float Dock?
+## ✨ What is DockShift?
 
-Float Dock is a **macOS-inspired floating dock** for Windows that puts 10 essential productivity tools at your fingertips. It hovers above all windows as a sleek, dark bar — click any icon to launch a draggable, resizable panel.
+DockShift is a **macOS-inspired floating dock** for Windows that puts 10 essential productivity tools at your fingertips. It hovers above all windows as a sleek, dark bar — click any icon to launch a draggable, resizable panel.
 
 Built with **Electron + React + Vite**, it features a premium dark UI with smooth animations, and runs as a lightweight overlay that stays out of your way until you need it.
 
@@ -140,8 +140,8 @@ Configure dock position, always-on-top behavior, launch-on-startup, clipboard li
 
 ```bash
 # Clone the repository
-git clone https://github.com/Nyx-abu/float-dock.git
-cd float-dock
+git clone https://github.com/Nyx-abu/dockshift.git
+cd dockshift
 
 # Install dependencies
 npm install
@@ -179,7 +179,7 @@ npm run build
 ## 🏗️ Architecture
 
 ```
-float-dock/
+dockshift/
 ├── electron-main.js          # Main process — IPC handlers, window management
 ├── preload.js                # Secure bridge between main & renderer
 ├── src/
@@ -228,7 +228,7 @@ float-dock/
 
 ## 🔒 Security
 
-Float Dock takes security seriously, especially as a desktop application with system-level access:
+DockShift takes security seriously, especially as a desktop application with system-level access:
 
 | Measure | Details |
 |---|---|
@@ -286,6 +286,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 **Built with ❤️ and way too much coffee**
 
-<sub>Float Dock — because Alt+Tab is so last decade.</sub>
+<sub>DockShift — because Alt+Tab is so last decade.</sub>
 
 </div>

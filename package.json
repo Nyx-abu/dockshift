@@ -1,5 +1,5 @@
 {
-  "name": "float-dock",
+  "name": "dockshift",
   "version": "1.0.0",
   "description": "macOS-style floating AI dock",
   "main": "electron-main.js",

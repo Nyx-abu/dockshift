@@ -123,7 +123,7 @@ $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
   # Skip this Electron app and dev tooling:
   if ($lowerExe -like '*\\node.exe' -or
       $lowerExe -like '*\\electron.exe' -or
-      $lowerExe -like '*\\float-dock.exe') {
+      $lowerExe -like '*\\dockshift.exe') {
     return $true
   }
 

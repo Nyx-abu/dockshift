@@ -140,7 +140,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
         </Section>
 
         <Section title="System" icon="💻">
-          <Toggle label="Launch on Startup" description="Start Float Dock when Windows boots"
+          <Toggle label="Launch on Startup" description="Start DockShift when Windows boots"
             value={settings.launchOnStartup} onChange={v => update('launchOnStartup', v)} />
         </Section>
 
@@ -180,7 +180,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
             <div style={{
               fontWeight: 700, fontSize: 13, marginBottom: 4,
               color: '#fff',
-            }}>Float Dock v1.0.0</div>
+            }}>DockShift v1.0.0</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
               A floating productivity dock for Windows.
             </div>

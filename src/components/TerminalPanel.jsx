@@ -110,7 +110,7 @@ export default function TerminalPanel({ isOpen, onClose, anchorRect }) {
           t.writeln('\x1b[38;2;230;80;50m \\   \x1b[38;2;255;255;255m\'--Y--\'\x1b[38;2;230;80;50m   / \x1b[0m');
           t.writeln('\x1b[38;2;230;80;50m  \'._\x1b[38;2;50;50;50m#######\x1b[38;2;230;80;50m_.  \x1b[0m');
           t.writeln('\x1b[38;2;230;80;50m     \'--^--\'     \x1b[0m');
-          t.writeln('\x1b[38;2;154;165;255m Welcome to Float Dock Terminal!\x1b[0m\r\n');
+          t.writeln('\x1b[38;2;154;165;255m Welcome to DockShift Terminal!\x1b[0m\r\n');
           // send an enter to get the prompt
           api.invoke('terminal:write', { data: '\r' });
         }
