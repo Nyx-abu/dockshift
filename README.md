@@ -1,135 +1,119 @@
 <div align="center">
 
-```
-  ____             _     ____  _     _  __ _   
- |  _ \  ___   ___| | __/ ___|| |__ (_)/ _| |_ 
- | | | |/ _ \ / __| |/ /\___ \| '_ \| | |_| __|
- | |_| | (_) | (__|   <  ___) | | | | |  _| |_ 
- |____/ \___/ \___|_|\_\|____/|_| |_|_|_|  \__|
-```
+<img src="assets/dockshift%20banner.png" alt="DockShift" width="100%" />
 
-### A sleek, floating productivity dock for Windows
+<br/><br/>
 
-[![Electron](https://img.shields.io/badge/Electron-40.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+### Your entire workflow — one keystroke away.
 
-**A floating dock for Windows, built around three things it does well:**<br/>
-persistent clipboard history · one-click workspace snapshots · a floating AI assistant with clipboard context<br/>
-<sub>…plus screenshots, voice-to-text, notes, a launcher, and lightweight terminal & browser panels.</sub>
+**DockShift** is a floating command dock for Windows. Clipboard history, workspace
+snapshots, a bring-your-own-model AI assistant, a real terminal, voice-to-text, and
+more — always within reach, never in your way.
 
-> **Windows only.** DockShift relies on Win32 / PowerShell window tracking and Windows
-> clipboard internals — macOS and Linux are not supported.
+<br/>
 
-[Getting Started](#-getting-started) · [Features](#-features) · [Architecture](#-architecture) · [Contributing](#-contributing)
+[![Electron](https://img.shields.io/badge/Electron-40-47848F?style=flat-square&labelColor=1A1B26&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&labelColor=1A1B26&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&labelColor=1A1B26&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&labelColor=1A1B26&logo=windows11&logoColor=4CC2FF)](https://www.microsoft.com/windows)
+
+[![Stars](https://img.shields.io/github/stars/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=F5A623)](https://github.com/Salah-XD/dockshift/stargazers)
+[![License](https://img.shields.io/github/license/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=22C55E)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=7AA2F7)](https://github.com/Salah-XD/dockshift/commits)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-BB9AF7?style=flat-square&labelColor=1A1B26)](#-contributing)
+
+[**Quick Start**](#-quick-start) · [**Features**](#-what-it-does) · [**Security**](#-built-secure) · [**Contributing**](#-contributing)
 
 </div>
 
 ---
 
-<br/>
-
 <div align="center">
-<img src="assets/dock-bar.png" alt="DockShift Bar" width="85%" />
-<p><em>The dock bar — minimal, elegant, always within reach</em></p>
+
+<img src="assets/dock%20preview.png" alt="The DockShift dock bar" width="92%" />
+
+<sub>One translucent bar, floating above everything. Tap an icon — a panel slides out. Click away — it's gone.</sub>
+
 </div>
 
 <br/>
 
-## ✨ What is DockShift?
+## 🤔 Why DockShift?
 
-DockShift is a **macOS-inspired floating dock** for Windows. It hovers above all windows as a
-sleek, dark bar — click any icon to launch a draggable, resizable panel.
+You've got a clipboard manager, a launcher, a notes app, a terminal, an AI chat tab, and
+a dozen browser windows open for *"that one doc."* Every tool lives somewhere else. Every
+task is a context switch.
 
-The dock bundles a handful of tools, but it's strongest at three of them:
+**DockShift collapses all of it into a single floating bar.** Hit `Ctrl + Shift + D` — it's
+there. Click an icon — a clean, draggable, resizable panel appears. Click away — it disappears.
+Your tools come to *you*.
 
-- **📋 Clipboard history** — persistent, type-aware, with image previews. The standout feature.
-- **📁 Workspace snapshots** — save and restore your open apps and window layout in one click.
-  There's no built-in Windows equivalent.
-- **✨ Floating AI assistant** — Gemini chat that can act on whatever's in your clipboard,
-  without leaving your current app.
-
-The remaining panels (screenshots, voice-to-text, notes, launcher) are solid for quick tasks.
-The **terminal and browser panels are intentionally lightweight** — handy for a quick command
-or doc lookup, not a replacement for Windows Terminal or a real browser.
-
-Built with **Electron + React + Vite**, it features a dark UI with smooth animations and runs
-as a lightweight overlay that stays out of your way until you need it.
+> [!IMPORTANT]
+> **Windows only.** DockShift hooks into Win32 window tracking and Windows clipboard
+> internals — macOS and Linux aren't supported.
 
 <br/>
 
-## 🎨 Features
+## 🚀 What it does
 
 <table>
 <tr>
-<td width="50%">
+<td width="55%"><img src="assets/ai%20assitant.png" alt="AI Assistant" width="100%" /></td>
+<td width="45%">
 
-### ✨ AI Assistant
-Chat with **Gemini 2.5 Flash** directly from your dock. Quick actions let you summarize, translate, fix code, or explain anything from your clipboard — fills your input so you can edit before sending.
+### 🤖 Bring-Your-Own-Model AI
 
-</td>
-<td width="50%">
-
-### 📋 Clipboard History
-System-wide clipboard manager tracking **text, images, files, links, and hex colors**. Filter by type, click any item to copy. Click images for a **fullscreen preview**. Stores up to 200 entries with intelligent deduplication.
-
-</td>
-</tr>
-<tr>
-<td>
-
-### 🖥️ Terminal *(lightweight)*
-An **xterm.js** terminal powered by **node-pty** for quick one-off commands. Single session, no tabs or splits — for serious terminal work, use Windows Terminal.
-
-</td>
-<td>
-
-### 🌐 Browser *(lightweight)*
-A sandboxed `webview` with a URL bar, bookmarks, and history — handy for a quick docs lookup. No extensions or autofill; it's not a daily-driver browser.
+Chat with **Gemini, GPT, Claude, OpenRouter, or a local Ollama model** — switch providers
+in a click, model lists fetched live. One-tap quick actions act on whatever's in your
+clipboard: *explain code · write tests · fix an error · add types.* Streaming replies,
+and keys are stored **encrypted by the OS keystore** — they never touch the renderer.
 
 </td>
 </tr>
 <tr>
-<td>
-
-### 📸 Screenshots
-Capture **full screen** or **individual windows** instantly. Screenshots are saved, thumbnailed, and browsable from a gallery. Click to **preview fullscreen**, copy, open in explorer, or delete.
-
-</td>
-<td>
-
-### 🎤 Voice to Text
-Speech recognition powered by **Gemini AI**. Record audio, get transcription via the main process — your API key never touches the renderer.
-
-</td>
-</tr>
-<tr>
-<td>
-
-### 📝 Quick Notes
-A rich-text note editor with **WYSIWYG formatting** — headings, bold, italic, lists, code blocks, blockquotes, and checkboxes. Pin important notes to the top.
-
-</td>
-<td>
-
-### ⚡ Quick Launcher
-Spotlight/PowerToys-style **app launcher**. Searches your Start Menu and system apps with fuzzy matching. Navigate with keyboard, press Enter to launch.
-
-</td>
-</tr>
-<tr>
-<td>
+<td width="45%">
 
 ### 📁 Workspace Snapshots
-Save and restore your **entire desktop workspace** — open applications, window positions, and dock state. Switch between project contexts in seconds.
+
+Save your open apps and window layout as a named snapshot — then restore your **entire
+project context in one click.** Expand any snapshot to see exactly what it captured, real
+app icons and all. There's no built-in Windows equivalent.
 
 </td>
-<td>
+<td width="55%"><img src="assets/workspace.png" alt="Workspace Snapshots" width="100%" /></td>
+</tr>
+<tr>
+<td width="55%"><img src="assets/terminal.png" alt="Terminal" width="100%" /></td>
+<td width="45%">
 
-### ⚙️ Settings
-Configure dock position, always-on-top behavior, launch-on-startup, clipboard limits, and view keyboard shortcuts. All preferences persist across sessions.
+### 🖥️ A *Real* Terminal
+
+A GPU-rendered terminal (`xterm.js` + WebGL, backed by `node-pty`) that actually pulls its
+weight: **copy/paste keybindings, `Ctrl+F` scrollback search, clickable links, font zoom**,
+and a **persistent session** that survives closing the panel. Clean Linux-style theme,
+tmux-style status bar.
+
+</td>
+</tr>
+<tr>
+<td width="45%">
+
+### 🎤 Voice to Text
+
+Hit record, get a transcript — powered by your AI provider's speech model. Audio is
+processed entirely in the main process, so your API key stays server-side.
+
+</td>
+<td width="55%"><img src="assets/voice%20to%20text.png" alt="Voice to Text" width="100%" /></td>
+</tr>
+<tr>
+<td width="55%"><img src="assets/setttings.png" alt="Settings" width="100%" /></td>
+<td width="45%">
+
+### ⚙️ Settings, Done Right
+
+A clean, developer-grade control panel — theme, dock position, launch-on-startup, AI
+provider & model, clipboard limits, shortcuts. Every preference persists across sessions.
 
 </td>
 </tr>
@@ -137,168 +121,160 @@ Configure dock position, always-on-top behavior, launch-on-startup, clipboard li
 
 <br/>
 
-<div align="center">
-<img src="assets/ai-panel.png" alt="AI Panel" width="45%" />
-&nbsp;&nbsp;&nbsp;
-<img src="assets/settings-panel.png" alt="Settings Panel" width="45%" />
-<p><em>AI Assistant and Settings panels — draggable, resizable, clean dark UI</em></p>
-</div>
+### …and there's more
+
+<table>
+<tr>
+<td width="33%">
+
+#### 📋 Clipboard History
+Persistent, system-wide, **type-aware** — text, images, files, links, and hex colors.
+Filter by type, click to re-copy, click images for a fullscreen preview.
+
+</td>
+<td width="33%">
+
+#### ⚡ Quick Launcher
+Spotlight-style app launcher with fuzzy search across your Start Menu — now with **real
+app icons**. Arrow keys to navigate, Enter to launch.
+
+</td>
+<td width="33%">
+
+#### 📝 Quick Notes
+A WYSIWYG rich-text editor — headings, lists, code blocks, checkboxes, blockquotes.
+Pin the notes that matter to the top.
+
+</td>
+</tr>
+<tr>
+<td width="33%">
+
+#### 📸 Screenshots
+Capture the full screen or a single window. Saved, thumbnailed, and browsable — preview,
+copy, or open in Explorer.
+
+</td>
+<td width="33%">
+
+#### 🌐 Browser
+A sandboxed `webview` with a URL bar, bookmarks, and history — perfect for a quick docs
+lookup without leaving your flow.
+
+</td>
+<td width="33%">
+
+#### 🎯 Floating Panels
+Every panel is **draggable and resizable from any edge**. Drag the dock itself by the grip
+handles. It all stays exactly where you put it.
+
+</td>
+</tr>
+</table>
 
 <br/>
 
-## 🚀 Getting Started
+## ⚡ Quick Start
 
-### Prerequisites
-
-- **Node.js** 18+ and **npm**
-- **Windows 10/11** (primary platform)
-- A **Gemini API key** from [Google AI Studio](https://aistudio.google.com/apikey) (for AI & voice features)
-
-### Installation
+> **Prerequisites** — [Node.js](https://nodejs.org/) 18+, Windows 10/11, and Windows build
+> tools (`node-pty` compiles natively). For AI features, an API key for your provider of
+> choice — or just run [Ollama](https://ollama.com/) locally, no key required.
 
 ```bash
-# Clone the repository
+# 1 — clone & install
 git clone https://github.com/Salah-XD/dockshift.git
 cd dockshift
-
-# Install dependencies
 npm install
 
-# Configure your API key
-cp .env.example .env
-# Edit .env and add your Gemini API key
-```
-
-### Running in Development
-
-```bash
-# Start both Vite dev server and Electron
+# 2 — run it
 npm run dev
-
-# Or run them separately:
-npm run dev:vite     # Start Vite (React HMR)
-npm run dev:electron # Start Electron
 ```
 
-### Building a Windows installer
+That's it. The dock appears at the bottom of your screen — press `Ctrl + Shift + D` to
+toggle it anytime.
+
+**Add your AI provider** in **Settings → AI & Models** — paste a key (stored encrypted) or
+pick Ollama for a fully local setup. _Optional:_ copy `.env.example` to `.env` for a
+dev-time Gemini key.
+
+<details>
+<summary><b>More commands</b></summary>
 
 ```bash
-npm run dist       # builds the renderer + a Windows NSIS installer & portable build → release/
-npm run dist:dir   # unpacked build (faster, for local testing)
+npm run dev:vite      # Vite dev server only (React HMR)
+npm run dev:electron  # Electron only (expects Vite already running)
+npm run build         # production renderer build → dist/
+npm run dist          # Windows NSIS installer + portable build → release/
+npm run dist:dir      # unpacked build (faster, for local testing)
 ```
 
-> Packaging requires an app icon at `assets/icon.ico`. Releases are also built automatically
-> by the GitHub Actions workflow when a `v*` tag is pushed.
+> Packaging needs an app icon at `assets/icon.ico`. Tagged `v*` pushes also build releases
+> via GitHub Actions.
 
-### Keyboard Shortcut
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl + Shift + D` | Toggle dock visibility |
+</details>
 
 <br/>
 
-## 🏗️ Architecture
+## 🏗️ Under the Hood
+
+DockShift is an **Electron** app: a `node-pty`/Win32-powered **main process** for all
+system access, and a **sandboxed React + Vite renderer** that talks to it only through an
+allowlisted IPC bridge.
+
+| Layer | Tech | Role |
+|---|---|---|
+| **Shell** | Electron 40 | Desktop runtime, system APIs, window tracking |
+| **UI** | React 18 + Vite 5 | Component UI with instant HMR |
+| **Terminal** | xterm.js + WebGL + node-pty | GPU-rendered embedded terminal |
+| **AI** | Gemini · OpenAI · Claude · Ollama · OpenRouter | Multi-provider chat & transcription |
+| **Panels** | re-resizable | Draggable, 8-way resizable containers |
 
 ```
 dockshift/
-├── electron-main.js          # Main process — IPC handlers, window management
-├── preload.js                # Secure bridge between main & renderer
-├── src/
-│   ├── App.jsx               # Root component
-│   ├── main.jsx              # React entry point
-│   ├── components/
-│   │   ├── DockMenu.jsx      # The dock bar with all icons
-│   │   ├── ResizablePanel.jsx # Shared draggable + resizable panel wrapper
-│   │   ├── AiPanel.jsx       # AI chat interface
-│   │   ├── ClipboardPanel.jsx # Clipboard history
-│   │   ├── TerminalPanel.jsx  # Integrated terminal
-│   │   ├── BrowserPanel.jsx   # Built-in browser
-│   │   ├── ScreenshotPanel.jsx # Screenshot capture
-│   │   ├── VoicePanel.jsx     # Voice-to-text
-│   │   ├── NotesPanel.jsx     # Rich text notes
-│   │   ├── LauncherPanel.jsx  # App launcher
-│   │   ├── WorkspacePanel.jsx # Workspace snapshots
-│   │   └── SettingsPanel.jsx  # Settings
-│   ├── hooks/
-│   │   └── usePanelPosition.js # Dragging + positioning logic
-│   ├── workspace/
-│   │   ├── SnapshotManager.js  # Save/load workspace snapshots
-│   │   ├── WindowTracker.js    # Track open windows
-│   │   └── TerminalManager.js  # Terminal session management
-│   └── styles/
-│       ├── global.css
-│       ├── DockMenu.css
-│       ├── panels.css          # Panel animations & shared styles
-│       └── ...
-├── .env.example              # API key template
-└── package.json
+├── electron-main.js     # main process — IPC, window mgmt, pty, AI providers
+├── preload.js           # the secure, allowlisted main ↔ renderer bridge
+├── electron-secrets.js  # OS-keystore-encrypted API key storage
+└── src/
+    ├── components/      # DockMenu + one *Panel.jsx per feature
+    ├── components/ui/   # the shared design-system component library
+    ├── hooks/           # panel drag + positioning
+    ├── workspace/       # snapshot / window-tracking logic
+    └── styles/          # design tokens + panel styles
 ```
 
-### Tech Stack
-
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Framework** | Electron 40 | Desktop app shell, system APIs |
-| **UI** | React 18 | Component-based UI |
-| **Build** | Vite 5 | Fast HMR & bundling |
-| **Terminal** | xterm.js + node-pty | Embedded terminal emulator |
-| **AI** | Google Gemini 2.5 Flash | AI chat, text processing & voice transcription |
-| **Panels** | re-resizable | Resizable panel containers |
-
 <br/>
 
-## 🔒 Security
+## 🔒 Built Secure
 
-DockShift takes security seriously, especially as a desktop application with system-level access:
+A floating dock with system-level access has to earn your trust:
 
-| Measure | Details |
+| Measure | What it means |
 |---|---|
-| **Context Isolation** | Renderer runs in a sandboxed context with `contextIsolation: true` |
-| **IPC Allowlists** | Both `invoke()` and `send()` channels are allowlisted in the preload script |
-| **No Node Integration** | Renderer has no direct access to Node.js APIs |
-| **Env Filtering** | Sensitive environment variables (API keys, tokens) are stripped from PTY sessions |
-| **Input Validation** | Shell commands use argument arrays (no string interpolation) to prevent injection |
-| **Path Traversal Protection** | File operations validate paths are within expected directories |
-| **Webview Sandboxing** | Browser panel uses isolated partition and blocks dangerous URL schemes |
-| **API Key Safety** | `.env` is gitignored; all API calls go through the main process — keys never touch the renderer |
-
-<br/>
-
-## 🎮 Usage Tips
-
-- **Drag panels freely** — grab any panel header to move it anywhere on screen
-- **Resize from any edge** — all panels support 8-direction resizing
-- **Toggle with hotkey** — `Ctrl+Shift+D` hides/shows the dock instantly
-- **Clipboard auto-tracks** — just copy anything on your system and it appears in history
-- **Click images to preview** — clipboard images and screenshots open in a fullscreen overlay
-- **Quick AI actions** — click a suggestion to fill your prompt, edit it, then send
-- **Keyboard launcher** — type to search, arrow keys to navigate, Enter to launch
+| **Context isolation + sandbox** | The renderer has zero direct Node.js access |
+| **Allowlisted IPC** | Every `invoke`/`send` channel is explicitly whitelisted in preload |
+| **Encrypted secrets** | API keys live in the OS keystore — never in the renderer, never in git |
+| **PTY env scrubbing** | Secret-looking environment variables are stripped from terminal sessions |
+| **Injection-safe** | Shell calls use argument arrays; paths are validated against traversal |
+| **Sandboxed webview** | The browser panel runs in an isolated partition, dangerous URL schemes blocked |
 
 <br/>
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how to get started:
+Pull requests are welcome — bug fixes, new panels, polish, all of it.
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
+1. **Fork** the repo and branch off (`git checkout -b feature/your-idea`)
+2. **Build** your thing — the renderer hot-reloads; main-process changes need a restart
+3. **Open a PR** with a clear description
 
-### Development Notes
-
-- The app uses ES Modules (`"type": "module"` in package.json)
-- Preload script uses CommonJS (required by Electron)
-- `node-pty` requires native compilation — run `npm install` with build tools available
-- Hot reload works for the React UI; Electron main process requires restart
+> **Good to know:** the project is ES Modules (`"type": "module"`), but `preload.js` is
+> CommonJS (Electron requires it). `node-pty` needs native build tools on first install.
 
 <br/>
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+[MIT](LICENSE) — free to use, fork, and build on.
 
 <br/>
 
@@ -306,8 +282,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 <div align="center">
 
-**Built with ❤️ and way too much coffee**
-
-<sub>DockShift — because Alt+Tab is so last decade.</sub>
+<sub>Built for people who keep too many windows open.</sub><br/>
+<sub><b>DockShift</b> — because Alt+Tab is so last decade.</sub>
 
 </div>

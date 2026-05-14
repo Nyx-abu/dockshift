@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import SnapsIcon from './SnapsIcon';
 import WorkspacePanel from './WorkspacePanel';
 import ClipboardPanel from './ClipboardPanel';
@@ -11,6 +11,7 @@ import LauncherPanel from './LauncherPanel';
 import TerminalPanel from './TerminalPanel';
 import BrowserPanel from './BrowserPanel';
 import ErrorBoundary from './ErrorBoundary';
+import { GripIcon } from './ui/icons';
 import '../styles/DockMenu.css';
 
 const DOCK_ITEMS = [
@@ -31,6 +32,21 @@ const DOCK_ITEMS = [
 
 // Items that have panels (open/close behavior)
 const PANEL_IDS = new Set(['folder', 'clipboard', 'mic', 'notes', 'sparkle', 'camera', 'settings', 'lightning', 'terminal', 'browser']);
+
+// Explicit grip on each end of the bar. Dragging it moves the dock — handled
+// in JS (the window is permanently fullscreen, so an OS `-webkit-app-region`
+// drag would drag the whole transparent overlay off-screen instead).
+function DockHandle({ side, onDragStart }) {
+  return (
+    <div
+      className={`dock-handle dock-handle-${side}`}
+      onMouseDown={onDragStart}
+      aria-hidden="true"
+    >
+      <GripIcon />
+    </div>
+  );
+}
 
 function TerminalIcon() {
   return (
@@ -120,26 +136,131 @@ function SettingsIcon() {
   );
 }
 
+// ── Dock bar positioning ─────────────────────────────────────────────────────
+const BAR_MARGIN = 16; // gap between the bar and the screen edge
+
+/** Resolve a named preset to a concrete {x, y} for the current screen + bar size. */
+function presetToPos(preset, barW, barH) {
+  const sw = window.screen.availWidth;
+  const sh = window.screen.availHeight;
+  const centerX = Math.round((sw - barW) / 2);
+  switch (preset) {
+    case 'bottom-left': return { x: BAR_MARGIN, y: sh - barH - BAR_MARGIN };
+    case 'bottom-right': return { x: sw - barW - BAR_MARGIN, y: sh - barH - BAR_MARGIN };
+    case 'top-center': return { x: centerX, y: BAR_MARGIN };
+    case 'bottom-center':
+    default: return { x: centerX, y: sh - barH - BAR_MARGIN };
+  }
+}
+
+/** Keep the bar on screen — always a few px reachable. */
+function clampPos(pos, barW, barH) {
+  const sw = window.screen.availWidth;
+  const sh = window.screen.availHeight;
+  const M = 4;
+  return {
+    x: Math.round(Math.max(M, Math.min(pos.x, sw - barW - M))),
+    y: Math.round(Math.max(M, Math.min(pos.y, sh - barH - M))),
+  };
+}
+
 export default function DockMenu({ onAction, activePanel }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [snapsReady] = useState(false);
   const [openPanel, setOpenPanel] = useState(null); // unified panel state
   const [anchorRect, setAnchorRect] = useState(null);
+  // Dock bar position within the fullscreen overlay. `null` until measured and
+  // resolved on mount — the bar stays hidden until then.
+  const [barPos, setBarPos] = useState(null);
+  // Cursor over the bar / a drag in progress — both keep the overlay
+  // hit-testable while the dock is collapsed.
+  const [barHovered, setBarHovered] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const api = window.electronAPI;
   const dockRef = useRef(null);
+
+  const expanded = !!openPanel;
+
+  // Drive the overlay's click-through state. The window is permanently
+  // fullscreen + transparent, so it must ignore mouse events everywhere EXCEPT
+  // while a panel is open, or the cursor is on / dragging the dock bar.
+  useEffect(() => {
+    const ignore = !expanded && !barHovered && !dragging;
+    api?.invoke?.('dock:setMouseIgnore', { ignore });
+  }, [expanded, barHovered, dragging, api]);
+
+  // Resolve the bar's initial position once it's mounted + measurable: prefer
+  // the saved free position, otherwise fall back to the saved preset.
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    const place = (settings) => {
+      const barW = el.offsetWidth || 480;
+      const barH = el.offsetHeight || 56;
+      const saved = settings?.dockBarPos;
+      const pos = saved && typeof saved.x === 'number'
+        ? saved
+        : presetToPos(settings?.dockPosition || 'bottom-center', barW, barH);
+      setBarPos(clampPos(pos, barW, barH));
+    };
+    api?.invoke?.('settings:get')?.then(place)?.catch(() => place(null));
+  }, [api]);
+
+  // Follow preset changes from the Settings panel — re-place the bar + persist.
+  useEffect(() => {
+    if (!api?.onDockPosition) return undefined;
+    return api.onDockPosition((preset) => {
+      const el = dockRef.current;
+      if (!el) return;
+      const pos = clampPos(presetToPos(preset, el.offsetWidth, el.offsetHeight), el.offsetWidth, el.offsetHeight);
+      setBarPos(pos);
+      api.invoke?.('settings:set', { settings: { dockBarPos: pos } });
+    });
+  }, [api]);
+
+  // Drag the dock bar by a grip handle.
+  const handleDragStart = useCallback((e) => {
+    const el = dockRef.current;
+    if (!el) return;
+    e.preventDefault();
+    setDragging(true);
+    const barW = el.offsetWidth;
+    const barH = el.offsetHeight;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origin = barPos || presetToPos('bottom-center', barW, barH);
+
+    const onMove = (ev) => {
+      setBarPos(clampPos(
+        { x: origin.x + (ev.clientX - startX), y: origin.y + (ev.clientY - startY) },
+        barW, barH,
+      ));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setDragging(false);
+      setBarPos((p) => {
+        if (p) api?.invoke?.('settings:set', { settings: { dockBarPos: p } });
+        return p;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [api, barPos]);
 
   const handleClick = (item, e) => {
     if (PANEL_IDS.has(item.id)) {
       if (openPanel === item.id) {
         // Toggle off
         setOpenPanel(null);
-        if (api?.invoke) api.invoke('dock:setExpanded', { expanded: false });
+        api?.invoke?.('dock:setExpanded', { expanded: false });
       } else {
         // Open this panel
         const rect = e.currentTarget.getBoundingClientRect();
         setAnchorRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height, bottom: rect.bottom, right: rect.right });
         setOpenPanel(item.id);
-        if (api?.invoke) api.invoke('dock:setExpanded', { expanded: true });
+        api?.invoke?.('dock:setExpanded', { expanded: true });
       }
       onAction(item.action);
     } else {
@@ -149,13 +270,48 @@ export default function DockMenu({ onAction, activePanel }) {
 
   const closePanel = () => {
     setOpenPanel(null);
-    if (api?.invoke) api.invoke('dock:setExpanded', { expanded: false });
+    api?.invoke?.('dock:setExpanded', { expanded: false });
   };
+
+  // Click-outside-to-close. When a panel is open the overlay is hit-testable
+  // everywhere; a mousedown whose target IS the bare .dock-menu backdrop means
+  // the user clicked empty space around the panel.
+  const handleBackdropMouseDown = (e) => {
+    if (openPanel && e.target === e.currentTarget) closePanel();
+  };
+
+  // The other half of click-outside: losing window focus (clicking another
+  // app, the taskbar, alt-tab). Main fires `dock:blurClose`; collapse on it.
+  useEffect(() => {
+    if (!api?.onDockBlur) return undefined;
+    return api.onDockBlur(() => {
+      setOpenPanel(null);
+      api.invoke?.('dock:setExpanded', { expanded: false });
+    });
+  }, [api]);
+
+  // Flip tooltips below the icons when the bar sits near the top of the screen.
+  const nearTop = barPos ? barPos.y < 120 : false;
 
   return (
     <>
-      <div className={`dock-menu${openPanel ? ' panel-open' : ''}`}>
-        <div className="dock-items" ref={dockRef}>
+      <div
+        className={`dock-menu${openPanel ? ' panel-open' : ''}`}
+        onMouseDown={handleBackdropMouseDown}
+      >
+        <div
+          className={`dock-items${nearTop ? ' dock-items--near-top' : ''}`}
+          ref={dockRef}
+          onMouseEnter={() => setBarHovered(true)}
+          onMouseLeave={() => setBarHovered(false)}
+          style={{
+            position: 'fixed',
+            left: barPos ? barPos.x : 0,
+            top: barPos ? barPos.y : 0,
+            visibility: barPos ? 'visible' : 'hidden',
+          }}
+        >
+          <DockHandle side="left" onDragStart={handleDragStart} />
           {DOCK_ITEMS.map((item) => {
             if (item.separator) {
               return <div key={item.id} className="dock-separator" />;
@@ -180,6 +336,7 @@ export default function DockMenu({ onAction, activePanel }) {
             </button>
             );
           })}
+          <DockHandle side="right" onDragStart={handleDragStart} />
         </div>
       </div>
 

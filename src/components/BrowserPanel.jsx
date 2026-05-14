@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { HEADER_STYLE, TITLE_STYLE, CLOSE_BTN } from '../hooks/usePanelPosition';
+import { HEADER_STYLE, TITLE_STYLE } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
+import {
+  Button,
+  IconButton,
+  Input,
+  Callout,
+  XIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  RefreshIcon,
+  StarIcon,
+  GlobeIcon,
+} from './ui';
 
 export default function BrowserPanel({ isOpen, onClose, anchorRect }) {
   const [url, setUrl] = useState('');
@@ -15,18 +27,16 @@ export default function BrowserPanel({ isOpen, onClose, anchorRect }) {
   const inputRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
 
-
-
   useEffect(() => {
     if (!isOpen) return;
-    api.invoke('browser:getBookmarks').then(b => setBookmarks(Array.isArray(b) ? b : [])).catch(() => {});
-    api.invoke('browser:getHistory').then(h => setHistory(Array.isArray(h) ? h : [])).catch(() => {});
+    api.invoke('browser:getBookmarks').then((b) => setBookmarks(Array.isArray(b) ? b : [])).catch(() => {});
+    api.invoke('browser:getHistory').then((h) => setHistory(Array.isArray(h) ? h : [])).catch(() => {});
   }, [isOpen, api]);
 
   // Webview event listeners
   useEffect(() => {
     const wv = webviewRef.current;
-    if (!wv || !isOpen) return;
+    if (!wv || !isOpen) return undefined;
     const onStart = () => setLoading(true);
     const onStop = () => { setLoading(false); setCurrentUrl(wv.getURL()); };
     const onFail = (e) => { setLoading(false); setError(e.errorDescription || 'Failed to load'); };
@@ -59,7 +69,9 @@ export default function BrowserPanel({ isOpen, onClose, anchorRect }) {
     }
 
     if (!/^https?:\/\//i.test(finalUrl)) {
-      finalUrl = finalUrl.includes('.') ? `https://${finalUrl}` : `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}`;
+      finalUrl = finalUrl.includes('.')
+        ? `https://${finalUrl}`
+        : `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}`;
     }
     setUrl(finalUrl);
     setCurrentUrl(finalUrl);
@@ -81,62 +93,70 @@ export default function BrowserPanel({ isOpen, onClose, anchorRect }) {
 
   if (!isOpen || !anchorRect) return null;
 
-  const navBtn = {
-    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px',
-    color: 'var(--ds-text-muted)', fontSize: 14, borderRadius: 4,
-    WebkitAppRegion: 'no-drag', display: 'flex', alignItems: 'center',
-  };
-
   const panel = (
-    <ResizablePanel
-      isOpen={isOpen}
-      dockAction="browser"
-      size="wide"
-    >
+    <ResizablePanel isOpen={isOpen} dockAction="browser" size="wide">
       <div style={HEADER_STYLE}>
-        <span style={TITLE_STYLE}>🌐 Browser</span>
-        <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
+        <span style={TITLE_STYLE}>Browser</span>
+        <IconButton variant="danger" title="Close" onClick={onClose}>
+          <XIcon size={14} />
+        </IconButton>
       </div>
 
       {/* Nav Bar */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-        <button onClick={() => webviewRef.current?.goBack()} style={navBtn} title="Back">←</button>
-        <button onClick={() => webviewRef.current?.goForward()} style={navBtn} title="Forward">→</button>
-        <button onClick={() => webviewRef.current?.reload()} style={navBtn} title="Reload">⟳</button>
-        <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex' }}>
-          <input ref={inputRef} value={url} onChange={e => setUrl(e.target.value)}
-            placeholder="Enter URL or search..."
-            style={{
-              flex: 1, background: 'var(--ds-bg-control)', border: '1px solid var(--ds-border)',
-              borderRadius: '6px 0 0 6px', padding: '7px 10px', color: 'var(--ds-text-primary)', fontSize: 11, outline: 'none',
-              WebkitAppRegion: 'no-drag',
-            }} />
-          <button type="submit" style={{
-            background: 'var(--ds-accent-bg)', border: '1px solid var(--ds-accent-border)',
-            borderRadius: '0 6px 6px 0', color: 'var(--ds-accent-light)', fontSize: 11, padding: '0 10px',
-            cursor: 'pointer', fontWeight: 600, WebkitAppRegion: 'no-drag',
-          }}>Go</button>
+      <div style={{ display: 'flex', gap: 'var(--ds-space-1)', alignItems: 'center', flexShrink: 0 }}>
+        <IconButton title="Back" onClick={() => webviewRef.current?.goBack()}>
+          <ChevronLeftIcon size={15} />
+        </IconButton>
+        <IconButton title="Forward" onClick={() => webviewRef.current?.goForward()}>
+          <ChevronRightIcon size={15} />
+        </IconButton>
+        <IconButton title="Reload" onClick={() => webviewRef.current?.reload()}>
+          <RefreshIcon size={14} />
+        </IconButton>
+        <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', gap: 'var(--ds-space-2)' }}>
+          <Input
+            ref={inputRef}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Enter URL or search…"
+            size="sm"
+            wrapStyle={{ flex: 1, width: 'auto' }}
+          />
+          <Button type="submit" variant="primary" size="sm">Go</Button>
         </form>
-        <button onClick={addBookmark} style={navBtn} title="Bookmark">⭐</button>
+        <IconButton title="Bookmark this page" onClick={addBookmark}>
+          <StarIcon size={14} />
+        </IconButton>
       </div>
 
       {/* Bookmarks bar */}
       {bookmarks.length > 0 && (
         <div style={{
-          display: 'flex', gap: 4, flexShrink: 0, overflowX: 'auto', paddingBottom: 2,
-          scrollbarWidth: 'none',
+          display: 'flex', gap: 'var(--ds-space-1)', flexShrink: 0,
+          overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none',
         }}>
           {bookmarks.slice(0, 8).map((bm, i) => {
             let host = bm.title;
-            try { host = new URL(bm.url).hostname.replace('www.', ''); } catch (_) {}
+            try { host = new URL(bm.url).hostname.replace('www.', ''); } catch (_) { /* keep title */ }
             return (
-              <button key={i} onClick={() => navigate(bm.url)} style={{
-                background: 'var(--ds-bg-input)', border: '1px solid var(--ds-border)',
-                borderRadius: 4, color: 'var(--ds-text-muted)', fontSize: 10, padding: '3px 8px',
-                cursor: 'pointer', whiteSpace: 'nowrap', WebkitAppRegion: 'no-drag',
-              }}>{host}</button>
+              <button
+                key={i}
+                onClick={() => navigate(bm.url)}
+                style={{
+                  background: 'var(--ds-bg-input)',
+                  border: '1px solid var(--ds-border)',
+                  borderRadius: 'var(--ds-radius-sm)',
+                  color: 'var(--ds-text-muted)',
+                  fontSize: 'var(--ds-font-xs)',
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  WebkitAppRegion: 'no-drag',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {host}
+              </button>
             );
           })}
         </div>
@@ -144,47 +164,73 @@ export default function BrowserPanel({ isOpen, onClose, anchorRect }) {
 
       {/* Loading bar */}
       {loading && (
-        <div style={{ height: 2, background: 'linear-gradient(90deg, #6e7dff, #4ac1ff)', borderRadius: 1, flexShrink: 0 }} />
+        <div style={{ height: 2, background: 'var(--ds-accent)', borderRadius: 1, flexShrink: 0 }} />
       )}
 
       {/* Error */}
-      {error && (
-        <div style={{
-          background: 'var(--ds-danger-bg)', border: '1px solid var(--ds-danger-border)',
-          borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--ds-danger-text)', flexShrink: 0,
-        }}>{error}</div>
-      )}
+      {error && <Callout tone="danger">{error}</Callout>}
 
       {/* Webview or placeholder */}
       {currentUrl ? (
-        <webview ref={webviewRef} src={currentUrl}
+        <webview
+          ref={webviewRef}
+          src={currentUrl}
           partition="persist:browser"
           allowpopups="false"
           style={{
-            flex: 1, borderRadius: 8, border: '1px solid var(--ds-border)',
-            minHeight: 0, background: '#ffffff',
+            flex: 1,
+            borderRadius: 'var(--ds-radius-md)',
+            border: '1px solid var(--ds-border)',
+            minHeight: 0,
+            background: '#ffffff',
           }}
         />
       ) : (
         <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', gap: 8,
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 'var(--ds-space-2)',
         }}>
-          <div style={{ fontSize: 32 }}>🌐</div>
-          <p style={{ color: 'var(--ds-text-dim)', fontSize: 12, textAlign: 'center' }}>
+          <div style={{ color: 'var(--ds-text-dim)' }}>
+            <GlobeIcon size={28} />
+          </div>
+          <p style={{ color: 'var(--ds-text-dim)', fontSize: 'var(--ds-font-sm)', textAlign: 'center' }}>
             Enter a URL above to browse, or search the web.
           </p>
           {history.length > 0 && (
-            <div style={{ width: '100%', marginTop: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ds-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 0' }}>
+            <div style={{ width: '100%', marginTop: 'var(--ds-space-2)' }}>
+              <div style={{
+                fontSize: 'var(--ds-font-xs)',
+                fontWeight: 'var(--ds-weight-semibold)',
+                color: 'var(--ds-text-dim)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                padding: '4px 0',
+              }}>
                 Recent
               </div>
               {history.slice(0, 5).map((h, i) => (
-                <button key={i} onClick={() => navigate(h.url)} style={{
-                  display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: '6px 0', color: 'var(--ds-text-muted)', fontSize: 11,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', WebkitAppRegion: 'no-drag',
-                }}>{h.title || h.url}</button>
+                <button
+                  key={i}
+                  onClick={() => navigate(h.url)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 0',
+                    color: 'var(--ds-text-muted)',
+                    fontSize: 'var(--ds-font-sm)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    WebkitAppRegion: 'no-drag',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {h.title || h.url}
+                </button>
               ))}
             </div>
           )}

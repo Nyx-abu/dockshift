@@ -43,16 +43,16 @@ export default class ErrorBoundary extends Component {
           zIndex: 9999,
           maxWidth: 320,
           padding: '14px 16px',
-          borderRadius: 12,
+          borderRadius: 'var(--ds-radius-lg)',
           background: 'var(--ds-bg-elevated)',
           border: '1px solid var(--ds-border-strong)',
           boxShadow: 'var(--ds-shadow-panel)',
           color: 'var(--ds-text-primary)',
-          fontSize: 12.5,
+          fontSize: 'var(--ds-font-sm)',
           lineHeight: 1.5,
         }}
       >
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+        <div style={{ fontWeight: 'var(--ds-weight-semibold)', marginBottom: 4 }}>
           The {this.props.label || 'panel'} hit an error
         </div>
         <div style={{ color: 'var(--ds-text-muted)', marginBottom: 10, wordBreak: 'break-word' }}>
@@ -63,10 +63,10 @@ export default class ErrorBoundary extends Component {
           style={{
             background: 'var(--ds-accent-bg)',
             border: '1px solid var(--ds-accent-border)',
-            borderRadius: 7,
+            borderRadius: 'var(--ds-radius-sm)',
             color: 'var(--ds-text-primary)',
-            fontSize: 11.5,
-            fontWeight: 500,
+            fontSize: 'var(--ds-font-xs)',
+            fontWeight: 'var(--ds-weight-medium)',
             padding: '5px 12px',
             cursor: 'pointer',
           }}

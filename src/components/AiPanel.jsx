@@ -1,29 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { HEADER_STYLE, TITLE_STYLE, CLOSE_BTN } from '../hooks/usePanelPosition';
+import { HEADER_STYLE, TITLE_STYLE } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
+import { Button, IconButton, Badge, XIcon, SparkleIcon, KeyIcon, ArrowUpIcon, RefreshIcon } from './ui';
 import '../styles/panels.css';
 
 // Developer-focused quick actions — each prepends a task-specific instruction
 // to whatever is on the clipboard (code, an error, a diff).
 const QUICK_ACTIONS = [
-  { label: '🔍 Explain code', prefix: 'Explain what the following code does, step by step:\n\n' },
-  { label: '✅ Write tests', prefix: 'Write unit tests for the following code. Match the conventions and style visible in the code:\n\n' },
-  { label: '🩹 Fix error', prefix: 'Here is an error message or stack trace. Explain the likely cause and how to fix it:\n\n' },
-  { label: '👀 Review', prefix: 'Review the following code for bugs, edge cases, and possible improvements. Be concise and specific:\n\n' },
-  { label: '📝 Add docs', prefix: 'Add clear doc comments to the following code. Return only the updated code:\n\n' },
-  { label: '🔤 Add types', prefix: 'Add type annotations to the following code. Return only the updated code:\n\n' },
+  { label: 'Explain code', prefix: 'Explain what the following code does, step by step:\n\n' },
+  { label: 'Write tests', prefix: 'Write unit tests for the following code. Match the conventions and style visible in the code:\n\n' },
+  { label: 'Fix error', prefix: 'Here is an error message or stack trace. Explain the likely cause and how to fix it:\n\n' },
+  { label: 'Review', prefix: 'Review the following code for bugs, edge cases, and possible improvements. Be concise and specific:\n\n' },
+  { label: 'Add docs', prefix: 'Add clear doc comments to the following code. Return only the updated code:\n\n' },
+  { label: 'Add types', prefix: 'Add type annotations to the following code. Return only the updated code:\n\n' },
 ];
 
 function TypingIndicator() {
   return (
     <div style={{ display: 'flex', gap: 5, padding: '6px 0', alignItems: 'center' }}>
-      {[1, 2, 3].map(i => (
-        <span key={i} style={{
-          width: 7, height: 7, borderRadius: '50%',
-          background: 'linear-gradient(135deg, #6e7dff, #4ac1ff)',
-          animation: `aiDot${i} 1.4s infinite ease-in-out`,
-        }} />
+      {[1, 2, 3].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'var(--ds-accent)',
+            animation: `aiDot${i} 1.4s infinite ease-in-out`,
+          }}
+        />
       ))}
     </div>
   );
@@ -51,7 +57,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
     let cancelled = false;
     setKeyStatus('checking');
     api.invoke('ai:status')
-      .then(res => {
+      .then((res) => {
         if (cancelled) return;
         setKeyStatus(res?.hasKey ? 'ok' : 'missing');
         setProviderLabel(res?.providerLabel || '');
@@ -68,7 +74,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
     return api.onAiStream({
       onChunk: ({ streamId, delta }) => {
         if (streamId !== activeStreamRef.current) return;
-        setMessages(prev => {
+        setMessages((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
           if (last && last.role === 'ai' && last.streaming) {
@@ -80,7 +86,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
       onDone: ({ streamId, text }) => {
         if (streamId !== activeStreamRef.current) return;
         activeStreamRef.current = null;
-        setMessages(prev => {
+        setMessages((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
           if (last && last.role === 'ai' && last.streaming) {
@@ -94,7 +100,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
       onError: ({ streamId, error }) => {
         if (streamId !== activeStreamRef.current) return;
         activeStreamRef.current = null;
-        setMessages(prev => {
+        setMessages((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
           // Replace the empty streaming bubble with an error bubble that keeps
@@ -131,7 +137,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
     if (!msg || loading) return;
     setInput('');
     // Append the user turn and an empty AI bubble that streamed chunks fill in.
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
       { role: 'user', text: msg },
       { role: 'ai', text: '', streaming: true, retryPrompt: msg },
@@ -143,7 +149,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
     } catch (err) {
       // The invoke itself failed (rare) — convert the placeholder to an error.
       activeStreamRef.current = null;
-      setMessages(prev => {
+      setMessages((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];
         if (last && last.role === 'ai' && last.streaming) {
@@ -162,7 +168,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
 
   // Retry a failed prompt: drop the error bubble, then resend.
   const retryMessage = useCallback((index, prompt) => {
-    setMessages(prev => prev.filter((_, i) => i !== index));
+    setMessages((prev) => prev.filter((_, i) => i !== index));
     sendMessage(prompt);
   }, [sendMessage]);
 
@@ -170,7 +176,7 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
     let clipContent = '';
     try {
       clipContent = await navigator.clipboard.readText();
-    } catch (_) {}
+    } catch (_) { /* clipboard unavailable */ }
     const text = action.prefix + (clipContent || '[paste your content here]');
     setInput(text);
     // Focus and move cursor to end
@@ -188,118 +194,138 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
 
   if (!isOpen || !anchorRect) return null;
 
+  const canSend = !!input.trim() && !loading && keyStatus === 'ok';
+
   const panel = (
-    <ResizablePanel
-      isOpen={isOpen}
-      dockAction="sparkle"
-    >
+    <ResizablePanel isOpen={isOpen} dockAction="sparkle">
       {/* Header */}
       <div style={HEADER_STYLE}>
-        <span style={TITLE_STYLE}>
-          ✨ AI Assistant
-          {providerLabel && keyStatus === 'ok' && (
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--ds-text-faint)', marginLeft: 6 }}>
-              · {providerLabel}
-            </span>
-          )}
+        <span style={{ ...TITLE_STYLE, display: 'flex', alignItems: 'center', gap: 'var(--ds-space-2)' }}>
+          AI Assistant
+          {providerLabel && keyStatus === 'ok' && <Badge tone="neutral">{providerLabel}</Badge>}
         </span>
         {messages.length > 0 && (
-          <button onClick={() => setMessages([])} style={{
-            background: 'var(--ds-bg-input)', border: '1px solid var(--ds-border)',
-            borderRadius: 7, color: 'var(--ds-text-faint)', fontSize: 10.5, padding: '4px 10px',
-            cursor: 'pointer', WebkitAppRegion: 'no-drag', fontWeight: 500,
-            transition: 'all 0.15s',
-            fontFamily: 'inherit',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--ds-text-primary)'; e.currentTarget.style.borderColor = 'var(--ds-border-strong)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--ds-text-faint)'; e.currentTarget.style.borderColor = 'var(--ds-border)'; }}
-          >Clear</button>
+          <Button variant="ghost" size="sm" onClick={() => setMessages([])}>Clear</Button>
         )}
-        <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--ds-text-primary)'; e.currentTarget.style.background = 'var(--ds-danger-bg)'; e.currentTarget.style.borderColor = 'var(--ds-danger-border)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--ds-text-faint)'; e.currentTarget.style.background = 'var(--ds-bg-input)'; e.currentTarget.style.borderColor = 'var(--ds-border)'; }}>✕</button>
+        <IconButton variant="danger" title="Close" onClick={onClose}>
+          <XIcon size={14} />
+        </IconButton>
       </div>
 
       {/* Quick Actions (shown when no messages and the AI is usable) */}
       {messages.length === 0 && keyStatus === 'ok' && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexShrink: 0 }}>
-          {QUICK_ACTIONS.map(a => (
-            <button key={a.label} onClick={() => handleQuickAction(a)} style={{
-              background: 'var(--ds-accent-bg-soft)',
-              border: '1px solid var(--ds-accent-bg)',
-              borderRadius: 20, color: 'var(--ds-accent-light)', fontSize: 10.5, padding: '6px 12px',
-              cursor: 'pointer', whiteSpace: 'nowrap', WebkitAppRegion: 'no-drag',
-              fontWeight: 500, transition: 'all 0.2s', fontFamily: 'inherit',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--ds-accent-bg)'; e.currentTarget.style.borderColor = 'var(--ds-accent-border)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--ds-accent-bg-soft)'; e.currentTarget.style.borderColor = 'var(--ds-accent-bg)'; }}
-            >{a.label}</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--ds-space-2)', flexShrink: 0 }}>
+          {QUICK_ACTIONS.map((a) => (
+            <button
+              key={a.label}
+              onClick={() => handleQuickAction(a)}
+              className="ai-quick-action"
+            >
+              {a.label}
+            </button>
           ))}
         </div>
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} style={{
-        flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10,
-        scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
-      }}>
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--ds-space-3)',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
+        }}
+      >
         {messages.length === 0 && !loading && keyStatus === 'ok' && (
-          <div style={{ textAlign: 'center', padding: 40, animation: 'fadeInUp 0.4s ease' }}>
-            <div style={{ fontSize: 36, marginBottom: 12, filter: 'drop-shadow(0 0 12px rgba(110,125,255,0.3))' }}>✨</div>
-            <p style={{ color: 'var(--ds-text-dim)', fontSize: 12, lineHeight: 1.6 }}>
+          <div style={{ textAlign: 'center', padding: 'var(--ds-space-8)', animation: 'fadeInUp 0.4s ease' }}>
+            <div style={{ color: 'var(--ds-accent-light)', marginBottom: 'var(--ds-space-3)' }}>
+              <SparkleIcon size={28} />
+            </div>
+            <p style={{ color: 'var(--ds-text-dim)', fontSize: 'var(--ds-font-sm)', lineHeight: 1.6 }}>
               Ask me anything or use a quick action above.
             </p>
           </div>
         )}
         {messages.length === 0 && keyStatus === 'checking' && (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <p style={{ color: 'var(--ds-text-dim)', fontSize: 12 }}>Checking AI configuration…</p>
+          <div style={{ textAlign: 'center', padding: 'var(--ds-space-8)' }}>
+            <p style={{ color: 'var(--ds-text-dim)', fontSize: 'var(--ds-font-sm)' }}>
+              Checking AI configuration…
+            </p>
           </div>
         )}
         {keyStatus === 'missing' && (
-          <div style={{
-            margin: 'auto', maxWidth: 300, textAlign: 'center', padding: '24px 20px',
-            background: 'var(--ds-bg-subtle)', border: '1px solid var(--ds-border)',
-            borderRadius: 14, animation: 'fadeInUp 0.4s ease',
-          }}>
-            <div style={{ fontSize: 30, marginBottom: 10 }}>🔑</div>
-            <p style={{ color: 'var(--ds-text-secondary)', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+          <div
+            style={{
+              margin: 'auto',
+              maxWidth: 300,
+              textAlign: 'center',
+              padding: 'var(--ds-space-6) var(--ds-space-5)',
+              background: 'var(--ds-bg-subtle)',
+              border: '1px solid var(--ds-border)',
+              borderRadius: 'var(--ds-radius-lg)',
+              animation: 'fadeInUp 0.4s ease',
+            }}
+          >
+            <div style={{ color: 'var(--ds-text-muted)', marginBottom: 'var(--ds-space-2)' }}>
+              <KeyIcon size={24} />
+            </div>
+            <p style={{
+              color: 'var(--ds-text-secondary)',
+              fontSize: 'var(--ds-font-base)',
+              fontWeight: 'var(--ds-weight-semibold)',
+              marginBottom: 'var(--ds-space-1)',
+            }}>
               {providerLabel ? `${providerLabel} isn't configured` : 'No AI provider configured'}
             </p>
-            <p style={{ color: 'var(--ds-text-faint)', fontSize: 11.5, lineHeight: 1.6 }}>
-              Open <strong style={{ color: 'var(--ds-text-secondary)' }}>Settings → AI / Models</strong> to
+            <p style={{ color: 'var(--ds-text-faint)', fontSize: 'var(--ds-font-sm)', lineHeight: 1.6 }}>
+              Open <strong style={{ color: 'var(--ds-text-secondary)' }}>Settings → AI &amp; Models</strong> to
               add an API key, or switch to a provider you've already set up.
               Local models via Ollama need no key.
             </p>
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} style={{
-            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-            maxWidth: '85%', padding: '10px 14px', borderRadius: 14,
-            background: msg.role === 'user'
-              ? 'linear-gradient(135deg, rgba(110,125,255,0.2), rgba(74,193,255,0.1))'
-              : msg.error ? 'var(--ds-danger-bg)' : 'var(--ds-bg-input)',
-            border: `1px solid ${msg.role === 'user' ? 'var(--ds-accent-bg)' : msg.error ? 'var(--ds-danger-border)' : 'var(--ds-border)'}`,
-            fontSize: 12, lineHeight: 1.7, color: msg.error ? 'var(--ds-danger-text)' : 'var(--ds-text-secondary)',
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            animation: 'fadeInUp 0.25s ease',
-            boxShadow: msg.role === 'user' ? '0 4px 16px rgba(110,125,255,0.08)' : 'none',
-          }}>
+          <div
+            key={i}
+            style={{
+              alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: '85%',
+              padding: '10px 14px',
+              borderRadius: 'var(--ds-radius-lg)',
+              background: msg.role === 'user'
+                ? 'var(--ds-accent-bg)'
+                : msg.error ? 'var(--ds-danger-bg)' : 'var(--ds-bg-input)',
+              border: `1px solid ${
+                msg.role === 'user'
+                  ? 'var(--ds-accent-border)'
+                  : msg.error ? 'var(--ds-danger-border)' : 'var(--ds-border)'
+              }`,
+              fontSize: 'var(--ds-font-sm)',
+              lineHeight: 1.7,
+              color: msg.error ? 'var(--ds-danger-text)' : 'var(--ds-text-secondary)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              animation: 'fadeInUp 0.25s ease',
+            }}
+          >
             {/* A streaming bubble with no text yet shows the typing dots. */}
             {msg.streaming && !msg.text ? <TypingIndicator /> : msg.text}
             {msg.error && msg.retryPrompt && (
-              <div style={{ marginTop: 8 }}>
-                <button
+              <div style={{ marginTop: 'var(--ds-space-2)' }}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<RefreshIcon size={12} />}
                   onClick={() => retryMessage(i, msg.retryPrompt)}
                   disabled={loading}
-                  style={{
-                    background: 'var(--ds-danger-bg)', border: '1px solid var(--ds-danger-border)',
-                    borderRadius: 7, color: 'var(--ds-danger-text)', fontSize: 11, fontWeight: 500,
-                    padding: '4px 10px', cursor: loading ? 'default' : 'pointer',
-                    WebkitAppRegion: 'no-drag', fontFamily: 'inherit',
-                  }}
-                >↻ Retry</button>
+                >
+                  Retry
+                </Button>
               </div>
             )}
           </div>
@@ -307,37 +333,46 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
       </div>
 
       {/* Input Area */}
-      <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'flex-end' }}>
-        <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+      <div style={{ display: 'flex', gap: 'var(--ds-space-2)', flexShrink: 0, alignItems: 'flex-end' }}>
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={keyStatus === 'ok' ? 'Ask anything…' : 'AI unavailable — no API key configured'}
           disabled={loading || keyStatus !== 'ok'}
           rows={Math.min(4, Math.max(1, input.split('\n').length))}
           style={{
-            flex: 1, background: 'var(--ds-bg-input)', border: '1px solid var(--ds-border)',
-            borderRadius: 12, padding: '10px 14px', color: 'var(--ds-text-primary)', fontSize: 12, outline: 'none',
-            WebkitAppRegion: 'no-drag', fontFamily: 'inherit', resize: 'none',
-            transition: 'border-color 0.2s', lineHeight: 1.5,
-            maxHeight: 100, minHeight: 38,
+            flex: 1,
+            background: 'var(--ds-bg-input)',
+            border: '1px solid var(--ds-border)',
+            borderRadius: 'var(--ds-radius-md)',
+            padding: '9px 12px',
+            color: 'var(--ds-text-primary)',
+            fontSize: 'var(--ds-font-sm)',
+            outline: 'none',
+            WebkitAppRegion: 'no-drag',
+            fontFamily: 'inherit',
+            resize: 'none',
+            transition: 'border-color var(--ds-dur-fast) var(--ds-ease)',
+            lineHeight: 1.5,
+            maxHeight: 100,
+            minHeight: 36,
             opacity: keyStatus === 'ok' ? 1 : 0.5,
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'var(--ds-accent-border)'; }}
-          onBlur={e => { e.currentTarget.style.borderColor = 'var(--ds-border)'; }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ds-accent-border)'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ds-border)'; }}
         />
-        {(() => {
-          const canSend = !!input.trim() && !loading && keyStatus === 'ok';
-          return (
-            <button onClick={() => sendMessage()} disabled={!canSend} style={{
-              padding: '10px 16px', borderRadius: 10,
-              background: canSend ? 'var(--ds-accent-bg)' : 'var(--ds-bg-subtle)',
-              border: `1px solid ${canSend ? 'var(--ds-accent-bg)' : 'var(--ds-border)'}`,
-              color: canSend ? 'var(--ds-accent-light)' : 'var(--ds-text-dim)',
-              fontSize: 14, cursor: canSend ? 'pointer' : 'default',
-              WebkitAppRegion: 'no-drag', transition: 'all 0.15s',
-              height: 38,
-            }}>↑</button>
-          );
-        })()}
+        <IconButton
+          variant="subtle"
+          size={36}
+          title="Send"
+          onClick={() => sendMessage()}
+          disabled={!canSend}
+          className={canSend ? 'ds-icon-btn--active' : ''}
+        >
+          <ArrowUpIcon size={16} />
+        </IconButton>
       </div>
     </ResizablePanel>
   );

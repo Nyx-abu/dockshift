@@ -17,20 +17,22 @@ export const PANEL_BASE_STYLE = {
   width: PANEL_WIDTH,
   height: 480,
   maxHeight: '80vh',
-  borderRadius: 16,
-  // Frosted-glass surface: a near-opaque fill (--ds-bg-panel) plus a strong
-  // backdrop blur that softens any panel/dock content showing through behind
-  // it. One treatment for every panel — no per-panel background overrides.
+  borderRadius: 'var(--ds-radius-xl)',
+  // Solid frosted-glass surface. NOTE: deliberately NO CSS backdrop-filter.
+  // On a transparent Electron window there is nothing *in the page* behind the
+  // panel to blur — it's the live desktop showing through OS transparency, and
+  // backdrop-filter can't reach that. Worse, it makes the panel sample empty
+  // transparent pixels and render see-through (that's why the panel looked
+  // like glass over VS Code). Real blur comes from the window's acrylic
+  // backdrop material, which the main process turns on when a panel opens.
   background: 'var(--ds-bg-panel)',
-  backdropFilter: 'blur(40px) saturate(1.6)',
-  WebkitBackdropFilter: 'blur(40px) saturate(1.6)',
   border: '1px solid var(--ds-border)',
   boxShadow: 'var(--ds-shadow-panel)',
   padding: '14px 14px 12px',
   color: 'var(--ds-text-primary)',
   display: 'flex',
   flexDirection: 'column',
-  gap: 10,
+  gap: 'var(--ds-space-3)',
   zIndex: 9500,
   pointerEvents: 'auto',
   WebkitAppRegion: 'no-drag',
@@ -38,18 +40,24 @@ export const PANEL_BASE_STYLE = {
   boxSizing: 'border-box',
   overflow: 'hidden',
   opacity: 0,
+  // Hidden until usePanelPosition() has centered it. Without this the panel
+  // can flash at the viewport's top-left for a frame — re-resizable briefly
+  // flips the element to `position: relative` on mount to measure its parent,
+  // and the window is still resizing to fullscreen underneath it.
+  visibility: 'hidden',
 };
 
 export const HEADER_STYLE = {
-  display: 'flex', alignItems: 'center', gap: 8,
+  display: 'flex', alignItems: 'center', gap: 'var(--ds-space-2)',
   flexShrink: 0, WebkitAppRegion: 'no-drag',
   cursor: 'grab',
   userSelect: 'none',
 };
 
 export const TITLE_STYLE = {
-  fontSize: 14, fontWeight: 600, flex: 1, letterSpacing: '-0.01em',
-  color: 'var(--ds-text-primary)',
+  fontSize: 'var(--ds-font-md)', fontWeight: 'var(--ds-weight-semibold)',
+  flex: 1, letterSpacing: '-0.01em',
+  color: 'var(--ds-text-strong)',
 };
 
 export const CLOSE_BTN = {
@@ -57,8 +65,8 @@ export const CLOSE_BTN = {
   border: '1px solid var(--ds-border)',
   cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  borderRadius: 7, padding: '4px', flexShrink: 0,
-  color: 'var(--ds-text-faint)', fontSize: 13, lineHeight: 1,
+  borderRadius: 'var(--ds-radius-sm)', padding: '4px', flexShrink: 0,
+  color: 'var(--ds-text-faint)', fontSize: 'var(--ds-font-base)', lineHeight: 1,
   transition: 'all 0.15s ease', WebkitAppRegion: 'no-drag',
   width: 24, height: 24,
 };
@@ -66,7 +74,8 @@ export const CLOSE_BTN = {
 export const INPUT_STYLE = {
   background: 'var(--ds-bg-input)',
   border: '1px solid var(--ds-border)',
-  borderRadius: 8, padding: '8px 12px', color: 'var(--ds-text-primary)', fontSize: 12,
+  borderRadius: 'var(--ds-radius-md)', padding: '8px 12px',
+  color: 'var(--ds-text-primary)', fontSize: 'var(--ds-font-sm)',
   outline: 'none', width: '100%', boxSizing: 'border-box',
   WebkitAppRegion: 'no-drag',
   transition: 'border-color 0.15s ease',
@@ -75,7 +84,7 @@ export const INPUT_STYLE = {
 
 export const SCROLL_AREA = {
   flex: 1, overflowY: 'auto', minHeight: 0,
-  display: 'flex', flexDirection: 'column', gap: 4,
+  display: 'flex', flexDirection: 'column', gap: 'var(--ds-space-1)',
   scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
   WebkitAppRegion: 'no-drag',
 };
@@ -94,55 +103,59 @@ export function usePanelPosition(isOpen, panelRef, dockAction, panelWidth = PANE
   useLayoutEffect(() => {
     if (!isOpen || !panelRef.current || hasPositioned.current) return;
 
-    // The Electron window resizes from ~480x140 to fullscreen when a panel opens.
-    // We need to wait for that resize to complete before centering.
+    // The Electron window grows from collapsed to fullscreen when a panel
+    // opens. Centering against `window.innerWidth` *during* that resize lands
+    // the panel at an intermediate spot and it visibly settles — so we wait
+    // until the window has actually reached (about) the screen's work area,
+    // then center once.
     let cancelled = false;
 
-    const positionPanel = () => {
-      if (cancelled || !panelRef.current) return;
+    // Stay hidden until centered. Also covers the re-open case, where the
+    // element still carries `visibility: visible` and a stale position.
+    panelRef.current.style.visibility = 'hidden';
 
+    const center = () => {
+      if (cancelled || !panelRef.current) return;
       const vW = window.innerWidth;
       const vH = window.innerHeight;
-
-      // If viewport is still the small dock size, wait for resize
-      if (vW < 600 || vH < 400) return;
-
       const pW = panelRef.current.offsetWidth || panelWidth;
       const pH = panelRef.current.offsetHeight || 480;
 
-      const tx = Math.round((vW - pW) / 2);
-      const ty = Math.round(Math.max(40, (vH - pH) / 2 - 20));
-
-      panelRef.current.style.left = `${tx}px`;
-      panelRef.current.style.top = `${ty}px`;
+      panelRef.current.style.left = `${Math.round((vW - pW) / 2)}px`;
+      panelRef.current.style.top = `${Math.round(Math.max(40, (vH - pH) / 2 - 20))}px`;
+      panelRef.current.style.visibility = 'visible';
       panelRef.current.classList.add('macos-pop');
-
       hasPositioned.current = true;
     };
 
-    // Try positioning on resize events (fired when electron window expands)
-    const onResize = () => {
-      if (hasPositioned.current) return;
-      positionPanel();
-      if (hasPositioned.current) {
-        window.removeEventListener('resize', onResize);
-      }
+    // Center only once the window has finished growing — i.e. its viewport
+    // has reached the screen work area (small tolerance for rounding/DPI).
+    const tryCenter = () => {
+      if (cancelled || hasPositioned.current) return;
+      const doneW = window.innerWidth >= window.screen.availWidth - 8;
+      const doneH = window.innerHeight >= window.screen.availHeight - 8;
+      if (doneW && doneH) center();
     };
 
+    const onResize = () => {
+      tryCenter();
+      if (hasPositioned.current) window.removeEventListener('resize', onResize);
+    };
     window.addEventListener('resize', onResize);
 
-    // Also try after a short delay as fallback
-    const timer = setTimeout(() => {
-      if (!hasPositioned.current) positionPanel();
-    }, 150);
+    // In case the window is already fullscreen (re-open) try immediately.
+    requestAnimationFrame(tryCenter);
 
-    // Try immediately in case window is already fullscreen
-    requestAnimationFrame(positionPanel);
+    // Safety net: if the resize never reports a full-size viewport, center
+    // anyway after a beat so the panel can't get stuck hidden.
+    const fallback = setTimeout(() => {
+      if (!hasPositioned.current) center();
+    }, 500);
 
     return () => {
       cancelled = true;
       window.removeEventListener('resize', onResize);
-      clearTimeout(timer);
+      clearTimeout(fallback);
     };
   }, [isOpen, panelWidth]);
 }

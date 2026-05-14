@@ -9,18 +9,59 @@
    not yet migrated still renders correctly.
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Scale tokens ──────────────────────────────────────────────
+   Theme-independent: spacing, type, radius, motion. Live in their own
+   :root so they apply under every data-theme. Components and panels
+   should reference these instead of hardcoding pixel values. */
+:root {
+  /* Spacing — 4px scale */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+
+  /* Font sizes */
+  --ds-font-xs: 11px;
+  --ds-font-sm: 12px;
+  --ds-font-base: 13px;
+  --ds-font-md: 14px;
+  --ds-font-lg: 16px;
+  --ds-font-xl: 20px;
+
+  /* Font weights */
+  --ds-weight-normal: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-semibold: 600;
+
+  /* Radii */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-radius-xl: 16px;
+  --ds-radius-pill: 999px;
+
+  /* Motion */
+  --ds-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ds-dur-fast: 120ms;
+  --ds-dur-base: 180ms;
+  --ds-dur-slow: 260ms;
+}
+
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
 
   /* Surfaces.
-     --ds-bg-panel is a near-opaque frosted surface. (A CSS backdrop-filter
-     can't blur the desktop through a transparent Electron window, so the
-     panel must carry its own look — a too-low alpha just reads as a faint
-     grey box.) The slight transparency + blur still softens overlapping
-     panels and the dock bar against each other. */
-  --ds-bg-panel: rgba(24, 26, 34, 0.94);
-  --ds-bg-dock: rgba(28, 30, 38, 0.92);
+     --ds-bg-panel is a near-opaque frosted surface. A CSS backdrop-filter
+     can't blur the desktop through a transparent Electron window (and makes
+     the panel render see-through), so the panel carries its own near-solid
+     fill; the real blur is the OS acrylic backdrop the main process toggles
+     on while a panel is open. */
+  --ds-bg-panel: rgba(24, 26, 34, 0.97);
+  --ds-bg-dock: rgba(28, 30, 38, 0.95);
   --ds-bg-elevated: #1a1c24;
   --ds-bg-input: rgba(255, 255, 255, 0.05);
   --ds-bg-subtle: rgba(255, 255, 255, 0.03);
@@ -29,6 +70,7 @@
   --ds-bg-tooltip: rgba(15, 17, 22, 0.95);
 
   /* Text */
+  --ds-text-strong: #e5e7eb;
   --ds-text-primary: #ffffff;
   --ds-text-secondary: rgba(255, 255, 255, 0.85);
   --ds-text-muted: rgba(255, 255, 255, 0.55);
@@ -63,14 +105,15 @@
   --ds-shadow-dock: 0 6px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
   --ds-shadow-tooltip: 0 3px 10px rgba(0, 0, 0, 0.3);
   --ds-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --ds-focus-ring: 0 0 0 2px var(--ds-bg-panel), 0 0 0 4px var(--ds-accent);
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
   /* Surfaces — see the dark-theme note. */
-  --ds-bg-panel: rgba(249, 250, 252, 0.96);
-  --ds-bg-dock: rgba(255, 255, 255, 0.95);
+  --ds-bg-panel: rgba(249, 250, 252, 0.98);
+  --ds-bg-dock: rgba(255, 255, 255, 0.97);
   --ds-bg-elevated: #ffffff;
   --ds-bg-input: rgba(0, 0, 0, 0.04);
   --ds-bg-subtle: rgba(0, 0, 0, 0.025);
@@ -79,6 +122,7 @@
   --ds-bg-tooltip: rgba(33, 35, 42, 0.96);
 
   /* Text */
+  --ds-text-strong: #1a1c24;
   --ds-text-primary: #1a1c24;
   --ds-text-secondary: rgba(26, 28, 36, 0.82);
   --ds-text-muted: rgba(26, 28, 36, 0.58);
@@ -113,4 +157,5 @@
   --ds-shadow-dock: 0 6px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.07);
   --ds-shadow-tooltip: 0 3px 12px rgba(0, 0, 0, 0.18);
   --ds-scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --ds-focus-ring: 0 0 0 2px var(--ds-bg-panel), 0 0 0 4px var(--ds-accent);
 }

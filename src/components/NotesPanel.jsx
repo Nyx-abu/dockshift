@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { HEADER_STYLE, TITLE_STYLE, CLOSE_BTN, INPUT_STYLE, SCROLL_AREA } from '../hooks/usePanelPosition';
+import { HEADER_STYLE, TITLE_STYLE, INPUT_STYLE, SCROLL_AREA } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
+import {
+  Button,
+  IconButton,
+  Input,
+  XIcon,
+  PlusIcon,
+  ChevronLeftIcon,
+  PinIcon,
+  TrashIcon,
+  SearchIcon,
+  FileIcon,
+} from './ui';
 import '../styles/panels.css';
 
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
 const TEXT_COLORS = [
-  { value: '', label: 'Default', css: 'rgba(255,255,255,0.85)' },
+  { value: '', label: 'Default', css: 'var(--ds-text-secondary)' },
   { value: '#ff6b6b', label: 'Red', css: '#ff6b6b' },
   { value: '#ffd166', label: 'Yellow', css: '#ffd166' },
   { value: '#06d6a0', label: 'Green', css: '#06d6a0' },
@@ -25,25 +37,23 @@ const FONT_SIZES = [
 ];
 
 // ─── Toolbar Button ───────────────────────────────────────────────────────────
-
-const TB_BASE = {
-  background: 'none', border: 'none', cursor: 'pointer', display: 'flex',
-  alignItems: 'center', justifyContent: 'center', borderRadius: 4,
-  width: 26, height: 26, flexShrink: 0, transition: 'all 0.12s',
-  WebkitAppRegion: 'no-drag', padding: 0,
-};
+// Thin wrapper over the shared IconButton. The `onMouseDown` preventDefault is
+// essential — it stops the contentEditable selection from collapsing when a
+// toolbar button is clicked.
 
 function TBtn({ onClick, active, title, children, style }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <button onClick={onClick} title={title} onMouseDown={e => e.preventDefault()}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{
-        ...TB_BASE,
-        background: active ? 'var(--ds-accent-bg)' : hovered ? 'var(--ds-bg-hover)' : 'none',
-        color: active ? 'var(--ds-accent-light)' : 'var(--ds-text-muted)',
-        ...style,
-      }}>{children}</button>
+    <IconButton
+      variant="ghost"
+      size={26}
+      active={active}
+      title={title}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      style={style}
+    >
+      {children}
+    </IconButton>
   );
 }
 
@@ -56,30 +66,75 @@ function Divider() {
 function NoteCard({ note, onClick, onPin, onDelete }) {
   const [hovered, setHovered] = useState(false);
   // Strip HTML tags for preview
-  const preview = note.body ? note.body.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().split('\n')[0].slice(0, 80) : 'Empty note';
-  const time = (() => { try { return new Date(note.updatedAt || note.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }); } catch { return ''; } })();
+  const preview = note.body
+    ? note.body.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().split('\n')[0].slice(0, 80)
+    : 'Empty note';
+  const time = (() => {
+    try {
+      return new Date(note.updatedAt || note.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  })();
 
   return (
-    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+        padding: '10px 12px',
+        borderRadius: 'var(--ds-radius-md)',
+        cursor: 'pointer',
         background: hovered ? 'var(--ds-bg-control)' : 'var(--ds-bg-subtle)',
-        border: '1px solid var(--ds-border)', transition: 'background 0.15s', WebkitAppRegion: 'no-drag',
-      }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {note.pinned && <span style={{ fontSize: 10 }}>📌</span>}
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ds-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        border: '1px solid var(--ds-border)',
+        transition: 'background var(--ds-dur-fast) var(--ds-ease)',
+        WebkitAppRegion: 'no-drag',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--ds-space-2)' }}>
+        {note.pinned && (
+          <span style={{ color: 'var(--ds-warning)', display: 'inline-flex', flexShrink: 0 }}>
+            <PinIcon size={12} />
+          </span>
+        )}
+        <span style={{
+          fontSize: 'var(--ds-font-base)',
+          fontWeight: 'var(--ds-weight-semibold)',
+          color: 'var(--ds-text-primary)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
           {note.title || 'Untitled'}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--ds-text-faint)' }}>{time}</span>
-        <button onClick={e => { e.stopPropagation(); onPin(); }} title={note.pinned ? 'Unpin' : 'Pin'}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: note.pinned ? '#ffd166' : 'var(--ds-text-dim)', fontSize: 12, WebkitAppRegion: 'no-drag' }}>📌</button>
-        <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--ds-text-dim)', fontSize: 12, WebkitAppRegion: 'no-drag' }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-danger)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-dim)'}>✕</button>
+        <span style={{ fontSize: 'var(--ds-font-xs)', color: 'var(--ds-text-faint)' }}>{time}</span>
+        <IconButton
+          size={22}
+          title={note.pinned ? 'Unpin' : 'Pin'}
+          active={note.pinned}
+          onClick={(e) => { e.stopPropagation(); onPin(); }}
+        >
+          <PinIcon size={12} />
+        </IconButton>
+        <IconButton
+          variant="danger"
+          size={22}
+          title="Delete"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        >
+          <TrashIcon size={12} />
+        </IconButton>
       </div>
-      <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ds-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview}</p>
+      <p style={{
+        margin: '4px 0 0',
+        fontSize: 'var(--ds-font-xs)',
+        color: 'var(--ds-text-muted)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        {preview}
+      </p>
     </div>
   );
 }
@@ -108,14 +163,15 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
   const dirtyRef = useRef(false);
   useEffect(() => { editNoteRef.current = editNote; }, [editNote]);
 
-
-
   // Load notes on open
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
-    api.invoke('notes:list').then(list => { setNotes(Array.isArray(list) ? list : []); setLoading(false); }).catch(() => setLoading(false));
-    setView('list'); setEditNote(null); setShowColors(false); loadedNoteId.current = null;
+    api.invoke('notes:list').then((list) => { setNotes(Array.isArray(list) ? list : []); setLoading(false); }).catch(() => setLoading(false));
+    setView('list');
+    setEditNote(null);
+    setShowColors(false);
+    loadedNoteId.current = null;
   }, [isOpen, api]);
 
   // Set editor HTML when a note is opened for editing
@@ -170,6 +226,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
         case 'b': e.preventDefault(); exec('bold'); break;
         case 'i': e.preventDefault(); exec('italic'); break;
         case 'u': e.preventDefault(); exec('underline'); break;
+        default: break;
       }
     }
     // Tab for indent
@@ -178,7 +235,6 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
       exec(e.shiftKey ? 'outdent' : 'indent');
     }
   }, [exec]);
-
 
   // ── Insert checklist item ──
   const insertChecklist = useCallback(() => {
@@ -210,7 +266,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
         // Keep editing the same note: sync the id without letting the
         // editor effect re-set innerHTML (which would reset the caret).
         loadedNoteId.current = note.id;
-        setEditNote(p => (p ? { ...p, id: note.id, createdAt: note.createdAt } : p));
+        setEditNote((p) => (p ? { ...p, id: note.id, createdAt: note.createdAt } : p));
       }
       const list = await api.invoke('notes:list');
       setNotes(Array.isArray(list) ? list : []);
@@ -250,7 +306,9 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
     await api.invoke('notes:save', { note });
     const list = await api.invoke('notes:list');
     setNotes(Array.isArray(list) ? list : []);
-    setView('list'); setEditNote(null); loadedNoteId.current = null;
+    setView('list');
+    setEditNote(null);
+    loadedNoteId.current = null;
     setSaveStatus('idle');
   }, [editNote, api]);
 
@@ -262,7 +320,12 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
     await api.invoke('notes:delete', { id });
     const list = await api.invoke('notes:list');
     setNotes(Array.isArray(list) ? list : []);
-    if (editNote?.id === id) { setView('list'); setEditNote(null); loadedNoteId.current = null; setSaveStatus('idle'); }
+    if (editNote?.id === id) {
+      setView('list');
+      setEditNote(null);
+      loadedNoteId.current = null;
+      setSaveStatus('idle');
+    }
   }, [editNote, api]);
 
   const handleTogglePin = useCallback(async (id) => {
@@ -273,7 +336,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
 
   if (!isOpen || !anchorRect) return null;
 
-  const filtered = notes.filter(n => {
+  const filtered = notes.filter((n) => {
     if (!search) return true;
     const s = search.toLowerCase();
     const bodyText = (n.body || '').replace(/<[^>]+>/g, '').toLowerCase();
@@ -288,47 +351,79 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
   const fontSize = editNote?.fontSize || 13;
 
   const panel = (
-    <ResizablePanel
-      isOpen={isOpen}
-      dockAction="notes"
-    >
+    <ResizablePanel isOpen={isOpen} dockAction="notes">
       {/* ── Header ── */}
       <div style={HEADER_STYLE}>
         {view === 'editor' && (
-          <button onClick={() => { flushAutoSave(); setView('list'); setEditNote(null); setShowColors(false); loadedNoteId.current = null; }}
-            style={{ ...CLOSE_BTN, color: 'var(--ds-text-muted)', fontSize: 14 }}>←</button>
+          <IconButton
+            variant="ghost"
+            title="Back to list"
+            onClick={() => {
+              flushAutoSave();
+              setView('list');
+              setEditNote(null);
+              setShowColors(false);
+              loadedNoteId.current = null;
+            }}
+          >
+            <ChevronLeftIcon size={14} />
+          </IconButton>
         )}
-        <span style={TITLE_STYLE}>{view === 'editor' ? (editNote?.id ? 'Edit Note' : 'New Note') : '📝 Quick Notes'}</span>
+        <span style={TITLE_STYLE}>
+          {view === 'editor' ? (editNote?.id ? 'Edit Note' : 'New Note') : 'Quick Notes'}
+        </span>
         {view === 'list' && (
-          <button onClick={() => { setEditNote({ id: null, title: '', body: '', pinned: false, fontSize: 13 }); setView('editor'); loadedNoteId.current = null; }}
-            style={{
-              background: 'var(--ds-accent-bg)', border: '1px solid var(--ds-accent-border)',
-              borderRadius: 6, color: 'var(--ds-accent-light)', fontSize: 11, padding: '4px 10px',
-              cursor: 'pointer', fontWeight: 600, WebkitAppRegion: 'no-drag',
-            }}>+ New</button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<PlusIcon size={13} />}
+            onClick={() => {
+              setEditNote({ id: null, title: '', body: '', pinned: false, fontSize: 13 });
+              setView('editor');
+              loadedNoteId.current = null;
+            }}
+          >
+            New
+          </Button>
         )}
-        <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
+        <IconButton variant="danger" title="Close" onClick={onClose}>
+          <XIcon size={14} />
+        </IconButton>
       </div>
 
       {view === 'list' ? (
         /* ── List View ── */
         <>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes..." style={INPUT_STYLE} />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search notes…"
+            icon={<SearchIcon size={14} />}
+          />
           <div style={SCROLL_AREA}>
-            {loading && <p style={{ color: 'var(--ds-text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>Loading…</p>}
+            {loading && (
+              <p style={{ color: 'var(--ds-text-muted)', fontSize: 'var(--ds-font-sm)', textAlign: 'center', padding: 'var(--ds-space-6)' }}>
+                Loading…
+              </p>
+            )}
             {!loading && sorted.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 32 }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>📝</div>
-                <p style={{ color: 'var(--ds-text-faint)', fontSize: 12 }}>{search ? 'No matching notes.' : 'No notes yet. Click + New to create one.'}</p>
+              <div style={{ textAlign: 'center', padding: 'var(--ds-space-8)' }}>
+                <div style={{ color: 'var(--ds-text-dim)', marginBottom: 'var(--ds-space-2)' }}>
+                  <FileIcon size={26} />
+                </div>
+                <p style={{ color: 'var(--ds-text-faint)', fontSize: 'var(--ds-font-sm)' }}>
+                  {search ? 'No matching notes.' : 'No notes yet. Click New to create one.'}
+                </p>
               </div>
             )}
-            {!loading && sorted.map(note => (
-              <NoteCard key={note.id} note={note}
+            {!loading && sorted.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
                 onClick={() => { setEditNote({ ...note }); setView('editor'); loadedNoteId.current = null; }}
                 onPin={() => handleTogglePin(note.id)}
-                onDelete={() => handleDelete(note.id)} />
+                onDelete={() => handleDelete(note.id)}
+              />
             ))}
           </div>
         </>
@@ -336,15 +431,30 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
         /* ── Editor View ── */
         <>
           {/* Title */}
-          <input value={editNote?.title || ''}
-            onChange={e => { setEditNote(p => ({ ...p, title: e.target.value })); scheduleAutoSave(); }}
-            placeholder="Note title..." style={{ ...INPUT_STYLE, fontSize: 14, fontWeight: 600, padding: '10px 12px' }} />
+          <input
+            value={editNote?.title || ''}
+            onChange={(e) => { setEditNote((p) => ({ ...p, title: e.target.value })); scheduleAutoSave(); }}
+            placeholder="Note title…"
+            style={{
+              ...INPUT_STYLE,
+              fontSize: 'var(--ds-font-md)',
+              fontWeight: 'var(--ds-weight-semibold)',
+              padding: '10px 12px',
+            }}
+          />
 
           {/* ── Formatting Toolbar ── */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0,
-            background: 'var(--ds-bg-subtle)', border: '1px solid var(--ds-border)',
-            borderRadius: 8, padding: '3px 6px', flexWrap: 'wrap', WebkitAppRegion: 'no-drag',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexShrink: 0,
+            background: 'var(--ds-bg-subtle)',
+            border: '1px solid var(--ds-border)',
+            borderRadius: 'var(--ds-radius-md)',
+            padding: '3px 6px',
+            flexWrap: 'wrap',
+            WebkitAppRegion: 'no-drag',
           }}>
             {/* Text styling */}
             <TBtn onClick={() => exec('bold')} active={formats.bold} title="Bold (Ctrl+B)">
@@ -359,7 +469,6 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             <TBtn onClick={() => exec('strikeThrough')} active={formats.strikeThrough} title="Strikethrough">
               <span style={{ textDecoration: 'line-through', fontSize: 12 }}>S</span>
             </TBtn>
-
 
             <Divider />
 
@@ -399,18 +508,23 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             <div style={{ flex: 1 }} />
 
             {/* Text color */}
-            <TBtn onClick={() => setShowColors(p => !p)} active={showColors} title="Text color"
-              style={{ position: 'relative' }}>
+            <TBtn onClick={() => setShowColors((p) => !p)} active={showColors} title="Text color" style={{ position: 'relative' }}>
               <span style={{ fontSize: 13, fontWeight: 700 }}>A</span>
-              <span style={{ position: 'absolute', bottom: 3, left: 5, right: 5, height: 3, borderRadius: 1,
-                background: 'linear-gradient(90deg, #ff6b6b, #ffd166, #06d6a0, #4ac1ff, #9aa5ff)' }} />
+              <span style={{
+                position: 'absolute', bottom: 3, left: 5, right: 5, height: 3,
+                borderRadius: 1, background: 'var(--ds-accent)',
+              }} />
             </TBtn>
 
             {/* Font size */}
-            {FONT_SIZES.map(fs => (
-              <TBtn key={fs.value} onClick={() => setEditNote(p => ({ ...p, fontSize: fs.value }))}
-                active={fontSize === fs.value} title={`Size ${fs.label}`}
-                style={{ width: 22, fontSize: 10, fontWeight: fontSize === fs.value ? 700 : 400 }}>
+            {FONT_SIZES.map((fs) => (
+              <TBtn
+                key={fs.value}
+                onClick={() => setEditNote((p) => ({ ...p, fontSize: fs.value }))}
+                active={fontSize === fs.value}
+                title={`Size ${fs.label}`}
+                style={{ width: 22, fontSize: 10, fontWeight: fontSize === fs.value ? 700 : 400 }}
+              >
                 {fs.label}
               </TBtn>
             ))}
@@ -418,27 +532,31 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
 
           {/* Color palette */}
           {showColors && (
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0, padding: '2px 0', WebkitAppRegion: 'no-drag' }}>
-              {TEXT_COLORS.map(c => (
-                <button key={c.label}
-                  onMouseDown={e => e.preventDefault()}
+            <div style={{ display: 'flex', gap: 'var(--ds-space-2)', flexShrink: 0, padding: '2px 0', WebkitAppRegion: 'no-drag' }}>
+              {TEXT_COLORS.map((c) => (
+                <button
+                  key={c.label}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    if (c.value) {
-                      exec('foreColor', c.value);
-                    } else {
-                      exec('removeFormat');
-                    }
+                    if (c.value) exec('foreColor', c.value);
+                    else exec('removeFormat');
                     setShowColors(false);
                   }}
                   title={c.label}
                   style={{
-                    width: 24, height: 24, borderRadius: '50%',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
                     border: '2px solid var(--ds-border-strong)',
-                    background: c.css, cursor: 'pointer', padding: 0, flexShrink: 0,
-                    transition: 'all 0.15s', WebkitAppRegion: 'no-drag',
+                    background: c.css,
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                    transition: 'transform var(--ds-dur-fast) var(--ds-ease), border-color var(--ds-dur-fast) var(--ds-ease)',
+                    WebkitAppRegion: 'no-drag',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.borderColor = 'var(--ds-text-faint)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'var(--ds-border-strong)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.borderColor = 'var(--ds-text-faint)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'var(--ds-border-strong)'; }}
                 />
               ))}
             </div>
@@ -453,37 +571,45 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             onKeyDown={handleEditorKeyDown}
             onInput={scheduleAutoSave}
             style={{
-              flex: 1, overflowY: 'auto', minHeight: 0,
-              background: 'var(--ds-bg-subtle)', border: '1px solid var(--ds-border)',
-              borderRadius: 10, padding: 12,
-              color: 'var(--ds-text-secondary)', fontSize: fontSize, lineHeight: 1.65,
+              flex: 1,
+              overflowY: 'auto',
+              minHeight: 0,
+              background: 'var(--ds-bg-subtle)',
+              border: '1px solid var(--ds-border)',
+              borderRadius: 'var(--ds-radius-md)',
+              padding: 'var(--ds-space-3)',
+              color: 'var(--ds-text-secondary)',
+              fontSize,
+              lineHeight: 1.65,
               fontFamily: 'inherit',
-              scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-text-dim) transparent',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
               WebkitAppRegion: 'no-drag',
             }}
           />
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 'var(--ds-space-2)', flexShrink: 0, alignItems: 'center' }}>
             <span style={{
-              fontSize: 10.5, color: 'var(--ds-text-faint)', minWidth: 54,
-              transition: 'opacity 0.2s',
+              fontSize: 'var(--ds-font-xs)',
+              color: 'var(--ds-text-faint)',
+              minWidth: 50,
+              transition: 'opacity var(--ds-dur-base) var(--ds-ease)',
             }}>
-              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : ''}
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
             </span>
-            <button onClick={handleSave} disabled={!editNote?.title?.trim()} style={{
-              flex: 1, padding: '8px 0', borderRadius: 8,
-              background: editNote?.title?.trim() ? 'var(--ds-accent-bg)' : 'var(--ds-bg-input)',
-              border: `1px solid ${editNote?.title?.trim() ? 'var(--ds-accent-border)' : 'var(--ds-border)'}`,
-              color: editNote?.title?.trim() ? 'var(--ds-accent-light)' : 'var(--ds-text-dim)',
-              fontSize: 12, fontWeight: 600, cursor: editNote?.title?.trim() ? 'pointer' : 'default', WebkitAppRegion: 'no-drag',
-            }}>Save Note</button>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={handleSave}
+              disabled={!editNote?.title?.trim()}
+            >
+              Save Note
+            </Button>
             {editNote?.id && (
-              <button onClick={() => handleDelete(editNote.id)} style={{
-                padding: '8px 16px', borderRadius: 8, background: 'var(--ds-danger-bg)',
-                border: '1px solid var(--ds-danger-border)', color: 'var(--ds-danger-text)', fontSize: 12,
-                fontWeight: 600, cursor: 'pointer', WebkitAppRegion: 'no-drag',
-              }}>Delete</button>
+              <Button variant="danger" onClick={() => handleDelete(editNote.id)}>
+                Delete
+              </Button>
             )}
           </div>
         </>

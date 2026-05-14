@@ -26,21 +26,73 @@
 .dock-container[data-dock-pos='bottom-right'] .dock-menu { justify-content: flex-end; }
 .dock-container[data-dock-pos='top-center'] .dock-menu { align-items: flex-start; }
 
-/* ── Dock bar ──────────────────────────────────────────────── */
+/* Panel open → the window is fullscreen. Dim the backdrop so the open panel is
+   the clear focus and the live desktop behind it isn't distracting. (Real OS
+   blur isn't achievable here — see the note in electron-main.js's
+   dock:setExpanded handler — so a solid scrim is the honest substitute.) Also
+   the click-outside-to-close target; see handleBackdropMouseDown in
+   DockMenu.jsx. */
+.dock-menu.panel-open {
+  background: rgba(8, 9, 12, 0.5);
+}
+
+/* ── Dock bar ──────────────────────────────────────────────────
+   Positioned with `position: fixed` + inline left/top from DockMenu.jsx —
+   the window is permanently fullscreen, so the bar's place on screen is
+   owned entirely by the renderer. z-index keeps it above open panels so its
+   icons stay clickable. NOT a window-drag region (that would drag the whole
+   fullscreen overlay) — dragging is handled in JS via the grip handles. */
 .dock-items {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   height: 52px;
-  padding: 6px 10px;
+  /* Tighter horizontal padding — the .dock-handle grips supply the edge inset. */
+  padding: 6px 4px;
   border-radius: 16px;
   background: var(--ds-bg-dock);
   border: 1px solid var(--ds-border);
   box-shadow: var(--ds-shadow-dock);
-  -webkit-app-region: drag;
-  position: relative;
+  z-index: 9700;
   overflow: visible;
+}
+
+/* ── Drag-handle grips ─────────────────────────────────────────
+   One on each end of the bar. `onMouseDown` starts a JS drag (see
+   handleDragStart in DockMenu.jsx). Faint at rest, brighter when the bar is
+   hovered, fully lit on direct hover. */
+.dock-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--ds-text-dim);
+  opacity: 0.4;
+  cursor: grab;
+  transition:
+    opacity var(--ds-dur-base) var(--ds-ease),
+    color var(--ds-dur-base) var(--ds-ease);
+}
+
+.dock-items:hover .dock-handle {
+  opacity: 0.7;
+}
+
+.dock-handle:hover {
+  opacity: 1;
+  color: var(--ds-text-muted);
+}
+
+.dock-handle:active {
+  cursor: grabbing;
+}
+
+.dock-handle svg {
+  width: 8px;
+  height: 18px;
 }
 
 /* ── Separator between icon groups ─────────────────────────── */
@@ -196,4 +248,20 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* ── Tooltip flip when the dock sits near the top of the screen ───
+   An upward tooltip would be clipped off-screen, so drop it below the icon
+   instead and flip the little arrow to point up. Driven by the
+   `dock-items--near-top` class DockMenu.jsx adds based on the bar's y. */
+.dock-items--near-top .dock-tooltip {
+  bottom: auto;
+  top: calc(100% + 10px);
+}
+
+.dock-items--near-top .dock-tooltip::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--ds-bg-tooltip);
 }

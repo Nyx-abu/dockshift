@@ -404,30 +404,19 @@ let snapshotManager = null;
 const windowTracker = new WindowTracker();
 const terminalManager = new TerminalManager();
 
-// ─── Dock window geometry ─────────────────────────────────────────────────────
-// The dock has two states:
-//   collapsed — a small window flush against one screen edge; only the dock
-//               bar is visible (the surrounding window area is transparent).
-//   expanded  — a fullscreen transparent window, so panels have room to open.
-// The collapsed window deliberately HUGS the screen edge (no gap) — the visual
-// margin comes entirely from CSS padding. That keeps the dock bar at the exact
-// same screen position in both states, so it never visibly jumps when a panel
-// opens. The renderer aligns the bar within the window via `data-dock-pos`.
-const DOCK_W = 520;
-const DOCK_H = 140;
-
-/** Collapsed-state window bounds for a given dock position. */
-function computeDockBounds(position) {
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const centerX = Math.round((sw - DOCK_W) / 2);
-  const map = {
-    'bottom-center': { x: centerX, y: sh - DOCK_H },
-    'bottom-left': { x: 0, y: sh - DOCK_H },
-    'bottom-right': { x: sw - DOCK_W, y: sh - DOCK_H },
-    'top-center': { x: centerX, y: 0 },
-  };
-  const pos = map[position] || map['bottom-center'];
-  return { x: pos.x, y: pos.y, width: DOCK_W, height: DOCK_H };
+// ─── Dock window ─────────────────────────────────────────────────────────────
+// The window is a single, permanently fullscreen, transparent overlay — it is
+// NEVER resized. Resizing a transparent window on Windows is visibly janky (the
+// dock bar slides, because the OS changes x and width on separate frames), so:
+//   • the window always covers the whole work area;
+//   • while no panel is open it is made click-through with setIgnoreMouseEvents,
+//     so the transparent area doesn't swallow clicks meant for the desktop —
+//     the renderer re-enables hit-testing while the cursor is over the dock bar
+//     (or a panel is open);
+//   • the dock bar is positioned and dragged entirely in the renderer, since
+//     `-webkit-app-region: drag` would drag the whole fullscreen window.
+function getWorkArea() {
+  return screen.getPrimaryDisplay().workAreaSize;
 }
 
 function getSnapshotManager() {
@@ -440,15 +429,14 @@ function getSnapshotManager() {
 }
 
 function createWindow() {
-  // Start in the collapsed position for the saved dock position (default
-  // bottom-center). applySettings() re-applies it below, harmlessly.
-  const initialBounds = computeDockBounds(readSettings().dockPosition || 'bottom-center');
+  // One permanently fullscreen, transparent overlay — never resized.
+  const { width: sw, height: sh } = getWorkArea();
 
   mainWindow = new BrowserWindow({
-    width: initialBounds.width,
-    height: initialBounds.height,
-    x: initialBounds.x,
-    y: initialBounds.y,
+    width: sw,
+    height: sh,
+    x: 0,
+    y: 0,
     // important for clean overlay on Windows
     frame: false,
     transparent: true,
@@ -473,11 +461,21 @@ function createWindow() {
     ? `http://localhost:${devPort}`
     : `file://${path.join(__dirname, 'dist', 'index.html')}`;
 
-  // Remember where to return to when a panel closes.
-  mainWindow.collapsedBounds = initialBounds;
+  // Click-outside-to-close: when the window loses focus while a panel is open
+  // (user clicked another app, the taskbar, alt-tabbed away), tell the renderer
+  // to collapse. The renderer owns panel state and does the actual close.
+  mainWindow.on('blur', () => {
+    if (isDockExpanded && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('dock:blurClose');
+    }
+  });
 
   mainWindow.loadURL(indexPath);
   mainWindow.show();
+
+  // Collapsed by default → the fullscreen overlay is click-through everywhere.
+  // The renderer re-enables hit-testing over the dock bar via dock:setMouseIgnore.
+  mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
   // Start clipboard history monitoring
   getClipboardHistory().start(mainWindow);
@@ -485,7 +483,11 @@ function createWindow() {
   // Apply saved preferences so they actually take effect on launch.
   applySettings(readSettings());
 
-  if (isDevelopment) {
+  // DevTools is NOT auto-opened. While DevTools is open, Chromium overlays the
+  // live viewport size in the page corner on every window resize — which fires
+  // each time the dock collapses/expands, and reads as a distracting flicker.
+  // Open it manually with Ctrl+Shift+I, or set DOCKSHIFT_DEVTOOLS=1 to auto-open.
+  if (isDevelopment && process.env.DOCKSHIFT_DEVTOOLS === '1') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 }
@@ -585,64 +587,35 @@ ipcMain.handle('workspace:delete', async (_event, { name }) => {
   return { ok: true };
 });
 
-// Apply dock layout (position + width) from renderer restore
+// Restore a dock layout from a workspace snapshot. The window never moves or
+// resizes anymore — this just tells the renderer where to place the dock bar.
 ipcMain.handle('dock:applyLayout', async (_event, { layout }) => {
-  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
-  if (!layout) return { ok: false };
-
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
-  const margin = 20;
-  const height = mainWindow.getBounds().height || 80;
-  const width = Math.max(260, Math.min(Number(layout.width || 480), screenWidth - margin * 2));
-
-  let x = mainWindow.getBounds().x;
-  let y = mainWindow.getBounds().y;
-
-  switch (layout.position) {
-    case 'left':
-      x = margin;
-      y = Math.round(screenHeight - height - margin);
-      break;
-    case 'top':
-      x = Math.round(screenWidth - width - margin);
-      y = margin;
-      break;
-    case 'bottom':
-      x = Math.round(screenWidth - width - margin);
-      y = Math.round(screenHeight - height - margin);
-      break;
-    case 'right':
-    default:
-      x = Math.round(screenWidth - width - margin);
-      y = Math.round(screenHeight - height - margin);
-      break;
+  if (!mainWindow || mainWindow.isDestroyed() || !layout) return { ok: false };
+  const map = { top: 'top-center', left: 'bottom-left', right: 'bottom-right', bottom: 'bottom-center' };
+  const position = map[layout.position] || 'bottom-center';
+  if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('dock:positionChanged', position);
   }
-
-  mainWindow.setBounds({ x, y, width, height });
   return { ok: true };
 });
 
-// Expand the window to fullscreen (so panels have room) / collapse it back to
-// the small dock-bar window. The dock bar itself doesn't move on screen — the
-// renderer keeps it pinned via CSS — so this is purely about the hit-testable
-// window area.
-ipcMain.handle('dock:setExpanded', async (_event, { expanded }) => {
-  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
-
-  if (expanded) {
-    // Snapshot where to return to, in case applyDockPosition never ran.
-    if (!mainWindow.collapsedBounds) mainWindow.collapsedBounds = mainWindow.getBounds();
-    mainWindow.setResizable(true);
-    mainWindow.setBounds({ x: 0, y: 0, width: screenWidth, height: screenHeight });
-  } else {
-    const bounds = mainWindow.collapsedBounds || computeDockBounds('bottom-center');
-    mainWindow.setBounds(bounds);
-    mainWindow.setResizable(false);
-  }
-
+// Track whether a panel is open. The window itself never resizes — it is
+// permanently fullscreen — so this only updates the flag the `blur` handler
+// and the show/hide logic read. Hit-testing is driven by `dock:setMouseIgnore`.
+ipcMain.handle('dock:setExpanded', (_event, { expanded }) => {
   isDockExpanded = !!expanded;
   return { ok: true, expanded: isDockExpanded };
+});
+
+// Toggle whether the (always-fullscreen, transparent) overlay swallows mouse
+// events. The renderer sends `ignore: true` when nothing should be hit-testable
+// (collapsed dock, cursor away from the bar) and `false` when the dock bar is
+// hovered/dragged or a panel is open. `forward: true` keeps mousemove flowing
+// to the page so the renderer can still detect the cursor entering the bar.
+ipcMain.handle('dock:setMouseIgnore', (_event, { ignore }) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+  mainWindow.setIgnoreMouseEvents(!!ignore, { forward: true });
+  return { ok: true };
 });
 
 // IPC Handlers for Clipboard
@@ -735,6 +708,52 @@ ipcMain.handle('ai:providers', () => ({
   providers: PROVIDER_LIST,
   encryptionAvailable: isEncryptionAvailable(),
 }));
+
+// ── AI model lists ───────────────────────────────────────────────────────────
+// Live model catalogs fetched from each provider, with the curated `models[]`
+// as a never-fail fallback. Successful live results are cached briefly so
+// reopening Settings or flipping providers doesn't re-hit the network; failures
+// are NOT cached, so a retry happens as soon as e.g. Ollama is started.
+const MODEL_LIST_TTL = 5 * 60 * 1000;
+const modelListCache = new Map(); // providerId -> { at, payload }
+
+ipcMain.handle('ai:listModels', async (_e, { provider: providerId } = {}) => {
+  const provider = getProvider(providerId) || getActiveProvider().provider;
+  if (!provider) {
+    return { ok: false, models: [], source: 'fallback', reason: 'unknown-provider' };
+  }
+
+  const cached = modelListCache.get(provider.id);
+  if (cached && Date.now() - cached.at < MODEL_LIST_TTL) return cached.payload;
+
+  const curated = provider.models || [];
+  let payload;
+  try {
+    if (typeof provider.listModels !== 'function') {
+      payload = { ok: true, models: curated, source: 'fallback', reason: 'no-fetcher' };
+    } else {
+      const apiKey = resolveApiKey(provider);
+      if (!provider.keyless && !apiKey) {
+        payload = { ok: false, models: curated, source: 'fallback', reason: 'no-key' };
+      } else {
+        const live = await provider.listModels({ apiKey });
+        const models = Array.isArray(live) ? live.filter(Boolean) : [];
+        payload = models.length
+          ? { ok: true, models, source: 'live' }
+          : { ok: false, models: curated, source: 'fallback', reason: 'empty' };
+      }
+    }
+  } catch (err) {
+    // Never throw across IPC — always degrade to the curated list.
+    payload = { ok: false, models: curated, source: 'fallback', reason: err?.message || 'fetch-failed' };
+  }
+
+  // Only cache genuine live results — keep retrying on failure.
+  if (payload.source === 'live') {
+    modelListCache.set(provider.id, { at: Date.now(), payload });
+  }
+  return payload;
+});
 
 /** Run a chat turn on the active provider. `onChunk` may be undefined. */
 async function runChat(prompt, onChunk, signal) {
@@ -916,22 +935,12 @@ function readSettings() {
 }
 
 /**
- * Move the dock to one of the four preset positions.
- *
- * Updates `collapsedBounds` (where the window returns to when no panel is
- * open) and broadcasts the position to the renderer so it can align the dock
- * bar to match. The window is only moved *now* if the dock is collapsed — if
- * a panel is open the window is fullscreen and will pick up the new
- * collapsedBounds when it next collapses. This is the fix for the position
- * setting doing nothing when changed from the (open) Settings panel.
+ * Move the dock bar to one of the four preset positions. The window is
+ * permanently fullscreen, so this just broadcasts the preset to the renderer,
+ * which positions (and snaps) the dock bar within the overlay.
  */
 function applyDockPosition(position) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const bounds = computeDockBounds(position);
-  mainWindow.collapsedBounds = bounds;
-  if (!isDockExpanded) {
-    mainWindow.setBounds(bounds);
-  }
   if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send('dock:positionChanged', position);
   }
@@ -1061,15 +1070,62 @@ ipcMain.handle('launcher:open', async (_e, { path: appPath, type }) => {
   }
 });
 
-// ─── Terminal IPC ─────────────────────────────────────────────────────────────
-let ptyProcess = null;
+// ─── App icons ────────────────────────────────────────────────────────────────
+// Extract the real icon for a file path (.exe / .lnk / .url / any file) so the
+// launcher and workspace lists can show actual app icons instead of generic
+// glyphs. Results are cached by path; an unresolvable path returns '' and the
+// renderer falls back to its generic icon. Bare command names (e.g. `calc.exe`)
+// and URI schemes (e.g. `ms-settings:`) won't resolve — that's expected.
+const iconCache = new Map();
+ipcMain.handle('app:getIcon', async (_e, { path: filePath } = {}) => {
+  if (typeof filePath !== 'string' || !filePath || filePath.length > 1024) return '';
+  if (iconCache.has(filePath)) return iconCache.get(filePath);
+  let url = '';
+  try {
+    if (fs.existsSync(filePath)) {
+      const img = await app.getFileIcon(filePath, { size: 'normal' });
+      if (img && !img.isEmpty()) url = img.toDataURL();
+    }
+  } catch (_) { /* unresolvable — fall through to '' */ }
+  iconCache.set(filePath, url);
+  return url;
+});
 
-ipcMain.handle('terminal:spawn', (e) => {
-  if (ptyProcess) {
-    ptyProcess.kill();
-  }
+// ─── Terminal IPC ─────────────────────────────────────────────────────────────
+// One persistent pty for the whole app session. The renderer reattaches to it
+// on every panel reopen (via `terminal:ensure` + `terminal:getBuffer` replay)
+// instead of restarting the shell each time. `terminal:spawn` is kept as the
+// explicit "Restart" action.
+let ptyProcess = null;
+let ptyBuffer = '';
+const PTY_BUFFER_MAX = 256 * 1024; // cap the replay buffer at ~256 KB
+
+// MOTD banner — an ASCII ">>" double-chevron logo, run as a real PowerShell
+// `-Command` at shell startup so it lives in ConPTY's own screen buffer and
+// survives resizes/repaints (a banner written straight to xterm gets wiped the
+// moment ConPTY repaints on a resize). Built with [char]0x2588 + single-quoted
+// strings so the command line carries no unicode and no double-quotes.
+const TERMINAL_BANNER = [
+  '$b=[string][char]0x2588+[string][char]0x2588',
+  "Write-Host ''",
+  "Write-Host ('   '+$b+'     '+$b) -ForegroundColor Blue",
+  "Write-Host ('     '+$b+'     '+$b) -ForegroundColor Cyan",
+  "Write-Host ('       '+$b+'     '+$b) -ForegroundColor White",
+  "Write-Host ('     '+$b+'     '+$b) -ForegroundColor Cyan",
+  "Write-Host ('   '+$b+'     '+$b) -ForegroundColor Blue",
+  "Write-Host ''",
+  "Write-Host '   DockShift Terminal ' -ForegroundColor White -NoNewline",
+  "Write-Host '- PowerShell session ready' -ForegroundColor DarkGray",
+  "Write-Host '   Ctrl+Shift+C/V copy-paste   Ctrl+F search   Ctrl+(+/-) zoom' -ForegroundColor DarkGray",
+  "Write-Host ''",
+].join('; ');
+
+/** Spawn a fresh pty, wire its data/exit, and make it the current session. */
+function spawnPty() {
   const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-  const shellArgs = os.platform() === 'win32' ? ['-NoLogo'] : [];
+  const shellArgs = os.platform() === 'win32'
+    ? ['-NoLogo', '-NoExit', '-Command', TERMINAL_BANNER]
+    : [];
   // Filter sensitive environment variables before passing to the PTY.
   // This is a *denylist of patterns* rather than a list of known key names —
   // any var whose name looks secret-ish (e.g. a user's own GOOGLE_API_KEY)
@@ -1082,25 +1138,56 @@ ipcMain.handle('terminal:spawn', (e) => {
     }
   }
 
-  ptyProcess = pty.spawn(shell, shellArgs, {
+  const proc = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: process.env.USERPROFILE || process.env.HOME || process.cwd(),
-    env: safeEnv
+    env: safeEnv,
   });
+  ptyBuffer = '';
 
-  ptyProcess.onData((data) => {
-    if (e.sender && !e.sender.isDestroyed()) {
-      e.sender.send('terminal:onData', data);
+  proc.onData((data) => {
+    if (ptyProcess !== proc) return; // a newer pty has replaced this one
+    // Keep a capped scrollback so a reopened panel can replay it.
+    ptyBuffer = (ptyBuffer + data).slice(-PTY_BUFFER_MAX);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:onData', data);
     }
   });
 
-  ptyProcess.onExit(() => {
+  proc.onExit(() => {
+    if (ptyProcess !== proc) return; // already replaced — stale exit
     ptyProcess = null;
+    ptyBuffer = '';
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:onExit');
+    }
   });
+
+  ptyProcess = proc;
+}
+
+// Explicit restart — always kills the current shell and spawns a fresh one.
+ipcMain.handle('terminal:spawn', () => {
+  if (ptyProcess) {
+    try { ptyProcess.kill(); } catch (_) { /* already dead */ }
+  }
+  ptyProcess = null;
+  spawnPty();
   return { ok: true };
 });
+
+// Spawn only if there's no live shell — used on panel open so a reopened panel
+// reattaches to the existing session instead of restarting it.
+ipcMain.handle('terminal:ensure', () => {
+  if (ptyProcess) return { ok: true, alreadyRunning: true };
+  spawnPty();
+  return { ok: true, alreadyRunning: false };
+});
+
+// Current scrollback, for replaying into a freshly-created xterm instance.
+ipcMain.handle('terminal:getBuffer', () => ptyBuffer);
 
 ipcMain.handle('terminal:write', (_e, { data }) => {
   if (ptyProcess) ptyProcess.write(data);
@@ -1109,6 +1196,18 @@ ipcMain.handle('terminal:write', (_e, { data }) => {
 ipcMain.handle('terminal:resize', (_e, { cols, rows }) => {
   if (ptyProcess) {
     try { ptyProcess.resize(cols, rows); } catch (err) {}
+  }
+});
+
+// Open a terminal hyperlink in the default browser — http/https only.
+ipcMain.handle('terminal:openLink', (_e, { url }) => {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false };
+    shell.openExternal(u.href);
+    return { ok: true };
+  } catch (_) {
+    return { ok: false };
   }
 });
 
@@ -1140,6 +1239,9 @@ function toggleWindowVisibility() {
     isVisible = false;
   } else {
     mainWindow.show();
+    // Re-assert hit-testing after show(): interactive only if a panel is open,
+    // otherwise click-through (the renderer re-syncs on the next mouse move).
+    mainWindow.setIgnoreMouseEvents(!isDockExpanded, { forward: true });
     isVisible = true;
   }
 }

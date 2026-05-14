@@ -46,6 +46,28 @@
 @keyframes aiDot2 { 0%, 80%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
 @keyframes aiDot3 { 0%, 80%, 100% { opacity: 0.2; } 60% { opacity: 1; } }
 
+/* ── AI panel: quick-action pills ──────────────────────────── */
+.ai-quick-action {
+  background: var(--ds-accent-bg-soft);
+  border: 1px solid var(--ds-accent-bg);
+  border-radius: var(--ds-radius-pill);
+  color: var(--ds-accent-light);
+  font-size: var(--ds-font-xs);
+  font-weight: var(--ds-weight-medium);
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+  font-family: inherit;
+  transition:
+    background var(--ds-dur-fast) var(--ds-ease),
+    border-color var(--ds-dur-fast) var(--ds-ease);
+}
+.ai-quick-action:hover {
+  background: var(--ds-accent-bg);
+  border-color: var(--ds-accent-border);
+}
+
 /* ── Screenshot flash ──────────────────────────────────────── */
 @keyframes screenshotFlash {
   0% { opacity: 0; } 10% { opacity: 0.8; } 100% { opacity: 0; }
@@ -54,6 +76,76 @@
 /* ── Terminal cursor blink ─────────────────────────────────── */
 @keyframes termCursor {
   0%, 100% { opacity: 1; } 50% { opacity: 0; }
+}
+
+/* ── Terminal: framed "screen" + tmux-style status bar ──────────
+   A real, opaque terminal surface (not the panel's frosted bg showing
+   through) with a status strip below — reads like a proper Linux terminal. */
+.term-screen {
+  position: relative; /* anchors the .term-find overlay */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #0c0d14;
+  border: 1px solid var(--ds-border-strong);
+  border-bottom: none;
+  border-radius: var(--ds-radius-md) var(--ds-radius-md) 0 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  -webkit-app-region: no-drag;
+}
+
+/* ── Terminal find bar — Ctrl+F overlay ─────────────────────── */
+.term-find {
+  position: absolute;
+  top: var(--ds-space-2);
+  right: var(--ds-space-2);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-1);
+  background: var(--ds-bg-elevated);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-panel);
+  -webkit-app-region: no-drag;
+  animation: panelFadeIn var(--ds-dur-fast) var(--ds-ease);
+}
+
+.term-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0 var(--ds-space-3);
+  background: #14151f;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: 0 0 var(--ds-radius-md) var(--ds-radius-md);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ds-text-faint);
+  -webkit-app-region: no-drag;
+}
+
+.term-statusbar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ds-success);
+  box-shadow: 0 0 5px var(--ds-success);
+  flex-shrink: 0;
+}
+
+/* Shell has exited — the dot goes dim and the status reads "Session ended". */
+.term-statusbar__dot--ended {
+  background: var(--ds-text-dim);
+  box-shadow: none;
+}
+
+.term-statusbar__spacer {
+  flex: 1;
 }
 
 /* ── General fade-in ───────────────────────────────────────── */

@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Dock
       'dock:applyLayout',
       'dock:setExpanded',
+      'dock:setMouseIgnore',
       // Notes
       'notes:list',
       'notes:save',
@@ -40,6 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // AI
       'ai:status',
       'ai:providers',
+      'ai:listModels',
       'ai:chat',
       'ai:chatStream',
       'ai:transcribe',
@@ -61,10 +63,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Launcher
       'launcher:search',
       'launcher:open',
+      'app:getIcon',
       // Terminal
       'terminal:spawn',
+      'terminal:ensure',
+      'terminal:getBuffer',
       'terminal:write',
       'terminal:resize',
+      'terminal:openLink',
       // Browser
       'browser:getBookmarks',
       'browser:saveBookmark',
@@ -85,6 +91,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('workspace:dockLayoutRestore', handler);
     return () => ipcRenderer.removeListener('workspace:dockLayoutRestore', handler);
   },
+  // Main process tells the renderer the window lost focus, so any open panel
+  // should collapse (click-outside-to-close).
+  onDockBlur: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('dock:blurClose', handler);
+    return () => ipcRenderer.removeListener('dock:blurClose', handler);
+  },
   // Main process tells the renderer which screen edge the dock should align to
   // (changed from Settings, or applied at startup).
   onDockPosition: (callback) => {
@@ -101,6 +114,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('terminal:onData', handler);
     return () => ipcRenderer.removeListener('terminal:onData', handler);
+  },
+  // Fired when the shell process exits — the renderer shows a "session ended"
+  // state with a Restart action.
+  onTerminalExit: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('terminal:onExit', handler);
+    return () => ipcRenderer.removeListener('terminal:onExit', handler);
   },
   // Streaming AI chat: main pushes chunk/done/error events, each tagged with
   // the streamId returned by the ai:chatStream invoke. One subscription wires

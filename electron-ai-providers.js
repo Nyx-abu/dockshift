@@ -57,6 +57,23 @@ async function httpError(provider, response) {
   return new Error(`${provider} request failed (${response.status}): ${detail || response.statusText}`);
 }
 
+/**
+ * GET + parse JSON with a short timeout. Used by the per-provider
+ * `listModels()` fetchers — kept deliberately strict so a slow or unreachable
+ * endpoint fails fast and the caller falls back to the curated list.
+ */
+async function fetchJson(url, { headers = {}, timeoutMs = 6000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: ctrl.signal });
+    if (!res.ok) throw await httpError('Model list', res);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ─── OpenAI-compatible chat (OpenAI + OpenRouter share this) ────────────── */
 async function openAiCompatChat({ endpoint, headers, model, prompt, onChunk, signal }) {
   const response = await fetch(endpoint, {
@@ -89,9 +106,30 @@ const gemini = {
   label: 'Google Gemini',
   keyName: 'gemini',
   keyless: false,
-  models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+  // Curated fallback — used only when the live `listModels()` fetch fails.
+  models: [
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+  ],
   defaultModel: 'gemini-2.5-flash',
   canTranscribe: true,
+
+  async listModels({ apiKey }) {
+    const json = await fetchJson(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+    );
+    return (json?.models || [])
+      .filter((m) =>
+        Array.isArray(m?.supportedGenerationMethods)
+          ? m.supportedGenerationMethods.includes('generateContent')
+          : true
+      )
+      .map((m) => String(m?.name || '').replace(/^models\//, ''))
+      .filter(Boolean);
+  },
 
   async chat({ apiKey, model, prompt, onChunk }) {
     const { GoogleGenAI } = await import('@google/genai');
@@ -133,9 +171,30 @@ const openai = {
   label: 'OpenAI',
   keyName: 'openai',
   keyless: false,
-  models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o4-mini'],
+  // Curated fallback — used only when the live `listModels()` fetch fails.
+  models: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4.1',
+    'gpt-4.1-mini',
+    'gpt-4.1-nano',
+    'o3',
+    'o4-mini',
+    'gpt-4-turbo',
+  ],
   defaultModel: 'gpt-4o-mini',
   canTranscribe: true,
+
+  async listModels({ apiKey }) {
+    const json = await fetchJson('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    // The endpoint lists embeddings/tts/whisper too — keep just the chat models.
+    return (json?.data || [])
+      .map((m) => m?.id)
+      .filter((id) => id && /^(gpt-|o1|o3|o4|chatgpt-)/.test(id))
+      .sort();
+  },
 
   chat({ apiKey, model, prompt, onChunk, signal }) {
     return openAiCompatChat({
@@ -169,9 +228,25 @@ const anthropic = {
   label: 'Anthropic Claude',
   keyName: 'anthropic',
   keyless: false,
-  models: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5-20251001'],
+  // Curated fallback — used only when the live `listModels()` fetch fails.
+  models: [
+    'claude-opus-4-7',
+    'claude-sonnet-4-6',
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-5',
+    'claude-3-7-sonnet-latest',
+    'claude-3-5-sonnet-latest',
+    'claude-3-5-haiku-latest',
+  ],
   defaultModel: 'claude-sonnet-4-6',
   canTranscribe: false,
+
+  async listModels({ apiKey }) {
+    const json = await fetchJson('https://api.anthropic.com/v1/models', {
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    });
+    return (json?.data || []).map((m) => m?.id).filter(Boolean);
+  },
 
   async chat({ apiKey, model, prompt, onChunk, signal }) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -208,9 +283,29 @@ const ollama = {
   label: 'Ollama (local)',
   keyName: null,
   keyless: true,
-  models: ['llama3.2', 'llama3.1', 'qwen2.5-coder', 'mistral', 'phi4'],
+  // Curated fallback — Ollama's real catalog is whatever the user has pulled,
+  // which `listModels()` reads live from the local daemon.
+  models: [
+    'llama3.3',
+    'llama3.2',
+    'llama3.1',
+    'qwen2.5-coder',
+    'qwen2.5',
+    'mistral',
+    'mixtral',
+    'phi4',
+    'gemma2',
+    'deepseek-r1',
+    'codellama',
+  ],
   defaultModel: 'llama3.2',
   canTranscribe: false,
+
+  async listModels() {
+    // Keyless and local — lists exactly the models the user has pulled.
+    const json = await fetchJson('http://127.0.0.1:11434/api/tags', { timeoutMs: 2500 });
+    return (json?.models || []).map((m) => m?.name).filter(Boolean);
+  },
 
   async chat({ model, prompt, onChunk, signal }) {
     // Ollama runs locally; default host, no key. Streams NDJSON.
@@ -262,14 +357,30 @@ const openrouter = {
   label: 'OpenRouter',
   keyName: 'openrouter',
   keyless: false,
+  // Curated fallback — used only when the live `listModels()` fetch fails.
   models: [
+    'openai/gpt-4o',
     'openai/gpt-4o-mini',
+    'anthropic/claude-opus-4-7',
     'anthropic/claude-sonnet-4-6',
+    'google/gemini-2.5-pro',
     'google/gemini-2.5-flash',
     'meta-llama/llama-3.3-70b-instruct',
+    'deepseek/deepseek-r1',
+    'mistralai/mistral-large',
   ],
   defaultModel: 'openai/gpt-4o-mini',
   canTranscribe: false,
+
+  async listModels() {
+    // OpenRouter's catalog endpoint is public — no key needed. It's large, but
+    // the model picker is searchable so the full list is fine.
+    const json = await fetchJson('https://openrouter.ai/api/v1/models', { timeoutMs: 8000 });
+    return (json?.data || [])
+      .map((m) => m?.id)
+      .filter(Boolean)
+      .sort();
+  },
 
   chat({ apiKey, model, prompt, onChunk, signal }) {
     return openAiCompatChat({

@@ -13,7 +13,11 @@ body {
   background: transparent;
   color: var(--ds-text-primary);
   user-select: none;
-  -webkit-app-region: drag;
+  /* NOT a drag region. The window is a fullscreen-capable transparent overlay;
+     making the whole body draggable turns every transparent pixel around the
+     dock into an invisible move handle. Only the dock bar (.dock-items) and
+     panel headers (data-drag-handle) opt into dragging. */
+  -webkit-app-region: no-drag;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
