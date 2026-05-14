@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { HEADER_STYLE, TITLE_STYLE, CLOSE_BTN, SCROLL_AREA } from '../hooks/usePanelPosition';
+import { useTheme } from '../context/ThemeContext';
 import ResizablePanel from './ResizablePanel';
+import AiSettings from './AiSettings';
+
+const THEME_OPTIONS = [
+  { value: 'light', label: '☀️ Light' },
+  { value: 'dark', label: '🌙 Dark' },
+  { value: 'system', label: '💻 System' },
+];
 
 const POSITIONS = [
   { value: 'bottom-center', label: 'Bottom Center' },
@@ -24,14 +32,14 @@ function Toggle({ value, onChange, label, description }) {
       onMouseLeave={() => setHovered(false)}
     >
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 500, color: '#fff', letterSpacing: '-0.01em' }}>{label}</div>
-        {description && <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)', marginTop: 3, lineHeight: 1.4 }}>{description}</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ds-text-primary)', letterSpacing: '-0.01em' }}>{label}</div>
+        {description && <div style={{ fontSize: 10.5, color: 'var(--ds-text-faint)', marginTop: 3, lineHeight: 1.4 }}>{description}</div>}
       </div>
       <button onClick={() => onChange(!value)} style={{
         width: 42, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
         background: value
           ? 'linear-gradient(135deg, rgba(110,125,255,0.6), rgba(74,193,255,0.4))'
-          : 'rgba(255,255,255,0.08)',
+          : 'var(--ds-bg-hover)',
         position: 'relative',
         transition: 'background 0.3s ease, box-shadow 0.3s ease',
         flexShrink: 0,
@@ -41,7 +49,7 @@ function Toggle({ value, onChange, label, description }) {
         <span style={{
           position: 'absolute', top: 3, left: value ? 21 : 3,
           width: 18, height: 18, borderRadius: '50%',
-          background: value ? '#fff' : 'rgba(255,255,255,0.4)',
+          background: value ? 'var(--ds-text-primary)' : 'var(--ds-text-faint)',
           transition: 'left 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.5), background 0.2s',
           boxShadow: value ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
         }} />
@@ -54,7 +62,7 @@ function Section({ title, icon, children }) {
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{
-        fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.2)',
+        fontSize: 10, fontWeight: 700, color: 'var(--ds-text-dim)',
         textTransform: 'uppercase', letterSpacing: '0.1em', padding: '10px 0 6px',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
@@ -62,8 +70,8 @@ function Section({ title, icon, children }) {
         {title}
       </div>
       <div style={{
-        background: 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.05)',
+        background: 'var(--ds-bg-subtle)',
+        border: '1px solid var(--ds-border)',
         borderRadius: 12, padding: '4px 14px',
         transition: 'border-color 0.2s',
       }}>{children}</div>
@@ -80,6 +88,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
   });
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -97,10 +106,10 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
   if (!isOpen || !anchorRect) return null;
 
   const selStyle = {
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--ds-bg-input)',
+    border: '1px solid var(--ds-border)',
     borderRadius: 8,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'var(--ds-text-secondary)',
     fontSize: 11.5,
     padding: '6px 10px',
     cursor: 'pointer',
@@ -114,27 +123,35 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
     <ResizablePanel
       isOpen={isOpen}
       dockAction="settings"
-      defaultWidth={370}
-      defaultHeight={440}
-      minWidth={300}
-      minHeight={300}
     >
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>⚙️ Settings</span>
         <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,59,48,0.15)'; e.currentTarget.style.borderColor = 'rgba(255,59,48,0.3)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}>✕</button>
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--ds-text-primary)'; e.currentTarget.style.background = 'var(--ds-danger-bg)'; e.currentTarget.style.borderColor = 'var(--ds-danger-border)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--ds-text-faint)'; e.currentTarget.style.background = 'var(--ds-bg-input)'; e.currentTarget.style.borderColor = 'var(--ds-border)'; }}>✕</button>
       </div>
 
       <div style={SCROLL_AREA}>
         <Section title="Appearance" icon="🎨">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', WebkitAppRegion: 'no-drag' }}>
-            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: '#fff' }}>Dock Position</span>
+            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: 'var(--ds-text-primary)' }}>Theme</span>
+            <select value={theme} onChange={e => setTheme(e.target.value)} style={selStyle}>
+              {THEME_OPTIONS.map(t => (
+                <option key={t.value} value={t.value} style={{ background: 'var(--ds-bg-elevated)', color: 'var(--ds-text-primary)' }}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', WebkitAppRegion: 'no-drag' }}>
+            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: 'var(--ds-text-primary)' }}>Dock Position</span>
             <select value={settings.dockPosition} onChange={e => update('dockPosition', e.target.value)} style={selStyle}>
-              {POSITIONS.map(p => <option key={p.value} value={p.value} style={{ background: '#14161e', color: '#fff' }}>{p.label}</option>)}
+              {POSITIONS.map(p => <option key={p.value} value={p.value} style={{ background: 'var(--ds-bg-elevated)', color: 'var(--ds-text-primary)' }}>{p.label}</option>)}
             </select>
           </div>
           <Toggle label="Always on Top" value={settings.alwaysOnTop} onChange={v => update('alwaysOnTop', v)} />
+        </Section>
+
+        <Section title="AI / Models" icon="✨">
+          <AiSettings settings={settings} update={update} api={api} />
         </Section>
 
         <Section title="System" icon="💻">
@@ -144,9 +161,9 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
 
         <Section title="Clipboard" icon="📋">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', WebkitAppRegion: 'no-drag' }}>
-            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: '#fff' }}>Max History Items</span>
+            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: 'var(--ds-text-primary)' }}>Max History Items</span>
             <select value={settings.clipboardMaxItems} onChange={e => update('clipboardMaxItems', Number(e.target.value))} style={selStyle}>
-              {[50, 100, 200, 500].map(n => <option key={n} value={n} style={{ background: '#14161e', color: '#fff' }}>{n}</option>)}
+              {[50, 100, 200, 500].map(n => <option key={n} value={n} style={{ background: 'var(--ds-bg-elevated)', color: 'var(--ds-text-primary)' }}>{n}</option>)}
             </select>
           </div>
         </Section>
@@ -160,16 +177,16 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
                 <span key={i}>
                   <span style={{
                     padding: '4px 8px', borderRadius: 6,
-                    background: 'rgba(110,125,255,0.08)',
-                    border: '1px solid rgba(110,125,255,0.15)',
+                    background: 'var(--ds-accent-bg-soft)',
+                    border: '1px solid var(--ds-accent-bg)',
                     fontFamily: "'Inter', monospace", fontSize: 11, fontWeight: 600,
-                    color: 'rgba(255,255,255,0.7)', letterSpacing: '0.02em',
+                    color: 'var(--ds-text-secondary)', letterSpacing: '0.02em',
                   }}>{key}</span>
-                  {i < 2 && <span style={{ color: 'rgba(255,255,255,0.15)', margin: '0 2px', fontSize: 10 }}>+</span>}
+                  {i < 2 && <span style={{ color: 'var(--ds-text-dim)', margin: '0 2px', fontSize: 10 }}>+</span>}
                 </span>
               ))}
             </div>
-            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>Toggle dock</span>
+            <span style={{ fontSize: 10.5, color: 'var(--ds-text-faint)' }}>Toggle dock</span>
           </div>
         </Section>
 
@@ -177,9 +194,9 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
           <div style={{ padding: '10px 0' }}>
             <div style={{
               fontWeight: 700, fontSize: 13, marginBottom: 4,
-              color: '#fff',
+              color: 'var(--ds-text-primary)',
             }}>DockShift v1.0.0</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: 'var(--ds-text-faint)', lineHeight: 1.5 }}>
               A floating productivity dock for Windows.
             </div>
           </div>

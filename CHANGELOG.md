@@ -8,6 +8,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Light / dark / system theme.** A CSS custom-property token system (`theme.css`) with a
+  `ThemeContext`; every panel reads theme tokens instead of hardcoded colors. Switchable from
+  Settings → Appearance; the preference persists.
+- **Multiple AI providers.** Gemini, OpenAI, Anthropic Claude, Ollama (local, no key), and
+  OpenRouter — selectable in Settings → AI / Models, with a model picker per provider.
+- **In-app API key management.** Keys are entered in Settings and stored encrypted via the OS
+  keystore (`safeStorage` / DPAPI). The renderer can only set/check/remove keys — a raw key
+  value never crosses the IPC boundary. `.env` still works as a Gemini dev override.
+- **Streaming AI responses.** Chat replies render incrementally as tokens arrive.
+- **Code-aware AI quick actions** — explain code, write tests, fix error, review, add docs,
+  add types — replacing the previous generic actions.
 - `electron-builder` configuration — `npm run dist` produces a Windows NSIS installer and a
   portable build.
 - Auto-update via `electron-updater`, wired to GitHub Releases (packaged builds only).

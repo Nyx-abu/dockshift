@@ -77,12 +77,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ds-scrollbar-thumb);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--ds-border-strong);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -95,12 +95,12 @@
   word-break: break-word;
   white-space: pre-wrap;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ds-text-secondary);
 }
 
 .notes-editor:empty::before {
   content: 'Start writing...';
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--ds-text-dim);
   font-style: italic;
   pointer-events: none;
 }
@@ -109,7 +109,7 @@
   font-size: 1.6em;
   font-weight: 700;
   margin: 10px 0 6px;
-  color: #fff;
+  color: var(--ds-text-primary);
   line-height: 1.3;
 }
 
@@ -117,7 +117,7 @@
   font-size: 1.35em;
   font-weight: 700;
   margin: 8px 0 4px;
-  color: #fff;
+  color: var(--ds-text-primary);
   line-height: 1.3;
 }
 
@@ -125,29 +125,30 @@
   font-size: 1.15em;
   font-weight: 600;
   margin: 6px 0 4px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--ds-text-primary);
   line-height: 1.3;
 }
 
 .notes-editor blockquote {
-  border-left: 3px solid rgba(110, 125, 255, 0.45);
+  border-left: 3px solid var(--ds-accent-border);
   padding-left: 12px;
   margin: 6px 0;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ds-text-muted);
   font-style: italic;
 }
 
 .notes-editor code {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--ds-bg-control);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   font-size: 0.88em;
-  color: #c4a8ff;
+  color: var(--ds-accent-light);
 }
 
 .notes-editor pre {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--ds-bg-subtle);
+  border: 1px solid var(--ds-border-subtle);
   border-radius: 6px;
   padding: 10px 12px;
   margin: 6px 0;
@@ -155,7 +156,7 @@
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 0.88em;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ds-text-secondary);
 }
 
 .notes-editor ul, .notes-editor ol {
@@ -169,18 +170,18 @@
 
 .notes-editor hr {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--ds-border);
   margin: 10px 0;
 }
 
 .notes-editor a {
-  color: #4ac1ff;
+  color: var(--ds-accent-cyan);
   text-decoration: underline;
 }
 
 .notes-editor input[type="checkbox"] {
   margin-right: 6px;
-  accent-color: #6e7dff;
+  accent-color: var(--ds-accent);
   vertical-align: middle;
   cursor: pointer;
 }

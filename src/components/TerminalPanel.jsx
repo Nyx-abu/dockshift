@@ -147,25 +147,19 @@ export default function TerminalPanel({ isOpen, onClose, anchorRect }) {
     <ResizablePanel
       isOpen={isOpen}
       dockAction="terminal"
-      defaultWidth={600}
-      defaultHeight={480}
-      minWidth={300}
-      minHeight={250}
-      style={{
-        background: 'radial-gradient(circle at top left, #1c1e26, #151820)',
-      }}
+      size="wide"
     >
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>🖥️ Terminal</span>
         <button onClick={() => { if (xtermRef.current) xtermRef.current.clear(); }}
           style={{
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11, padding: '4px 8px',
+            background: 'var(--ds-bg-control)', border: '1px solid var(--ds-border)',
+            borderRadius: 6, color: 'var(--ds-text-muted)', fontSize: 11, padding: '4px 8px',
             cursor: 'pointer', WebkitAppRegion: 'no-drag',
           }}>Clear</button>
         <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>✕</button>
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
       </div>
 
       <div style={{

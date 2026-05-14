@@ -2,22 +2,29 @@
    DockShift — DockMenu.css
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Dock menu wrapper ─────────────────────────────────────── */
+/* ── Dock menu wrapper ─────────────────────────────────────────
+   Fills the whole window and pins the dock bar to one edge. The 16px
+   padding IS the gap between the bar and the screen edge — the collapsed
+   window hugs the edge with no gap of its own, so the bar lands at the
+   same screen position whether the window is collapsed or expanded
+   (i.e. it doesn't jump when a panel opens). Alignment is driven by the
+   data-dock-pos attribute App sets on .dock-container. */
 .dock-menu {
   display: flex;
+  width: 100%;
+  height: 100%;
   align-items: flex-end;
   justify-content: center;
-  width: 100%;
+  padding: 16px;
+  box-sizing: border-box;
   background: transparent;
   position: relative;
   overflow: visible;
-  padding-bottom: 10px;
 }
 
-.dock-menu.panel-open {
-  align-items: flex-end;
-  padding-bottom: 54px;
-}
+.dock-container[data-dock-pos='bottom-left'] .dock-menu { justify-content: flex-start; }
+.dock-container[data-dock-pos='bottom-right'] .dock-menu { justify-content: flex-end; }
+.dock-container[data-dock-pos='top-center'] .dock-menu { align-items: flex-start; }
 
 /* ── Dock bar ──────────────────────────────────────────────── */
 .dock-items {
@@ -28,11 +35,9 @@
   height: 52px;
   padding: 6px 10px;
   border-radius: 16px;
-  background: rgba(28, 30, 38, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.35),
-    0 2px 6px rgba(0, 0, 0, 0.2);
+  background: var(--ds-bg-dock);
+  border: 1px solid var(--ds-border);
+  box-shadow: var(--ds-shadow-dock);
   -webkit-app-region: drag;
   position: relative;
   overflow: visible;
@@ -42,7 +47,7 @@
 .dock-separator {
   width: 1px;
   height: 24px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ds-border-strong);
   margin: 0 3px;
   flex-shrink: 0;
 }
@@ -78,7 +83,7 @@
   justify-content: center;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
               color 0.15s ease;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ds-text-muted);
 }
 
 .dock-icon svg {
@@ -89,11 +94,11 @@
 /* ── Hover ─────────────────────────────────────────────────── */
 .dock-item:hover {
   transform: translateY(-4px) scale(1.08);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ds-bg-hover);
 }
 
 .dock-item:hover .dock-icon {
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 /* ── Active press ──────────────────────────────────────────── */
@@ -104,11 +109,11 @@
 
 /* ── Active state — panel is open ──────────────────────────── */
 .dock-item.active {
-  background: rgba(110, 125, 255, 0.15);
+  background: var(--ds-accent-bg);
 }
 
 .dock-item.active .dock-icon {
-  color: #a5aeff;
+  color: var(--ds-accent-light);
 }
 
 /* Active dot indicator */
@@ -121,17 +126,18 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #6e7dff;
+  background: var(--ds-accent);
 }
 
 /* ── Snaps Ready — green state ─────────────────────────────── */
 .dock-item.snaps-ready {
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: var(--ds-success-bg);
+  border: 1px solid var(--ds-success-border);
 }
 
 .dock-item.snaps-ready:hover {
-  background: rgba(34, 197, 94, 0.2);
+  background: var(--ds-success-bg);
+  filter: brightness(1.4);
   transform: translateY(-4px) scale(1.08);
 }
 
@@ -141,7 +147,7 @@
   right: 3px;
   width: 6px;
   height: 6px;
-  background: #22c55e;
+  background: var(--ds-success);
   border-radius: 50%;
   animation: snapsIndicatorPulse 2s ease-in-out infinite;
 }
@@ -157,8 +163,8 @@
   bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 17, 22, 0.95);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--ds-bg-tooltip);
+  color: rgba(255, 255, 255, 0.92);
   padding: 5px 10px;
   border-radius: 7px;
   font-size: 11px;
@@ -166,7 +172,7 @@
   white-space: nowrap;
   pointer-events: none;
   animation: tooltipFadeIn 0.15s ease forwards;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--ds-shadow-tooltip);
   z-index: 99999;
   letter-spacing: 0.01em;
 }
@@ -178,7 +184,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: rgba(15, 17, 22, 0.95);
+  border-top-color: var(--ds-bg-tooltip);
 }
 
 @keyframes tooltipFadeIn {

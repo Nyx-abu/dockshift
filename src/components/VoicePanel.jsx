@@ -122,21 +122,17 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
     <ResizablePanel
       isOpen={isOpen}
       dockAction="mic"
-      defaultWidth={360}
-      defaultHeight={480}
-      minWidth={300}
-      minHeight={300}
     >
       {/* Header */}
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>🎤 Voice to Text</span>
         <select value={language} onChange={e => setLanguage(e.target.value)}
           style={{ ...INPUT_STYLE, width: 'auto', fontSize: 11, padding: '4px 8px', borderRadius: 6 }}>
-          {LANGUAGES.map(l => <option key={l.code} value={l.code} style={{ background: '#1e2330' }}>{l.label}</option>)}
+          {LANGUAGES.map(l => <option key={l.code} value={l.code} style={{ background: 'var(--ds-bg-elevated)' }}>{l.label}</option>)}
         </select>
         <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>✕</button>
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
       </div>
 
       {/* Record Button */}
@@ -168,15 +164,15 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
       </div>
 
       {/* Status */}
-      <div style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
+      <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--ds-text-faint)', flexShrink: 0 }}>
         {isRecording ? (
-          <span style={{ color: '#ff6666', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4444', animation: 'voiceDot 1s ease-in-out infinite' }} />
+          <span style={{ color: 'var(--ds-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ds-danger)', animation: 'voiceDot 1s ease-in-out infinite' }} />
             Listening... (Click to Stop)
           </span>
         ) : isTranscribing ? (
-          <span style={{ color: '#4ac1ff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ width: 12, height: 12, border: '2px solid #4ac1ff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <span style={{ color: 'var(--ds-accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ width: 12, height: 12, border: '2px solid var(--ds-accent-cyan)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             Transcribing...
           </span>
         ) : 'Click to start recording'}
@@ -185,22 +181,22 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
       {/* Error */}
       {error && (
         <div style={{
-          background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)',
-          borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#ff8787',
+          background: 'var(--ds-danger-bg)', border: '1px solid var(--ds-danger-border)',
+          borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--ds-danger-text)',
         }}>{error}</div>
       )}
 
       {/* Transcript */}
       <div ref={scrollRef} style={{
         flex: 1, overflowY: 'auto', minHeight: 0,
-        background: 'rgba(0,0,0,0.2)', borderRadius: 10,
+        background: 'var(--ds-bg-subtle)', borderRadius: 10,
         padding: 12, fontSize: 13, lineHeight: 1.6,
-        color: 'rgba(255,255,255,0.85)',
-        scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent',
+        color: 'var(--ds-text-secondary)',
+        scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
       }}>
         {transcript && <span>{transcript}</span>}
         {!transcript && !isTranscribing && (
-          <span style={{ color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>
+          <span style={{ color: 'var(--ds-text-dim)', fontStyle: 'italic' }}>
             Your transcript will appear here...
           </span>
         )}
@@ -210,16 +206,16 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
         <button onClick={handleCopy} disabled={!transcript} style={{
           flex: 1, padding: '8px 0', borderRadius: 8,
-          background: copied ? 'rgba(74,193,255,0.15)' : 'rgba(110,125,255,0.15)',
-          border: `1px solid ${copied ? 'rgba(74,193,255,0.3)' : 'rgba(110,125,255,0.25)'}`,
-          color: copied ? '#4ac1ff' : transcript ? '#9aa5ff' : 'rgba(255,255,255,0.2)',
+          background: copied ? 'var(--ds-accent-bg)' : 'var(--ds-accent-bg)',
+          border: `1px solid ${copied ? 'var(--ds-accent-border)' : 'var(--ds-accent-border)'}`,
+          color: copied ? 'var(--ds-accent-cyan)' : transcript ? 'var(--ds-accent-light)' : 'var(--ds-text-dim)',
           fontSize: 12, fontWeight: 600, cursor: transcript ? 'pointer' : 'default',
           transition: 'all 0.2s', WebkitAppRegion: 'no-drag',
         }}>{copied ? '✓ Copied!' : 'Copy to Clipboard'}</button>
         <button onClick={handleClear} disabled={!transcript} style={{
           padding: '8px 16px', borderRadius: 8,
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-          color: transcript ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+          background: 'var(--ds-bg-control)', border: '1px solid var(--ds-border-strong)',
+          color: transcript ? 'var(--ds-text-muted)' : 'var(--ds-text-dim)',
           fontSize: 12, fontWeight: 600,
           cursor: transcript ? 'pointer' : 'default',
           WebkitAppRegion: 'no-drag',

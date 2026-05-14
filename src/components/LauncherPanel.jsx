@@ -58,49 +58,45 @@ export default function LauncherPanel({ isOpen, onClose, anchorRect }) {
     <ResizablePanel
       isOpen={isOpen}
       dockAction="lightning"
-      defaultWidth={420}
-      defaultHeight={480}
-      minWidth={300}
-      minHeight={300}
     >
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>⚡ Quick Launcher</span>
         <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>✕</button>
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
       </div>
 
       {/* Search */}
       <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
         placeholder="Search apps, commands..."
         style={{
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 10, padding: '12px 14px', color: '#fff', fontSize: 14, fontWeight: 500,
+          background: 'var(--ds-bg-control)', border: '1px solid var(--ds-border-strong)',
+          borderRadius: 10, padding: '12px 14px', color: 'var(--ds-text-primary)', fontSize: 14, fontWeight: 500,
           outline: 'none', width: '100%', boxSizing: 'border-box', WebkitAppRegion: 'no-drag',
         }} />
 
       {/* Results */}
       <div style={{
         flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2,
-        scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent',
+        scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-text-dim) transparent',
       }}>
         {!query && !loading && (
           <div style={{ textAlign: 'center', padding: 32 }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Type to search for apps and commands.</p>
+            <p style={{ color: 'var(--ds-text-faint)', fontSize: 12 }}>Type to search for apps and commands.</p>
           </div>
         )}
-        {loading && <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', padding: 16 }}>Searching…</p>}
+        {loading && <p style={{ color: 'var(--ds-text-muted)', fontSize: 12, textAlign: 'center', padding: 16 }}>Searching…</p>}
         {!loading && query && results.length === 0 && (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textAlign: 'center', padding: 24 }}>No results found.</p>
+          <p style={{ color: 'var(--ds-text-faint)', fontSize: 12, textAlign: 'center', padding: 24 }}>No results found.</p>
         )}
         {results.map((item, i) => (
           <button key={item.path + i} onClick={() => launch(item)} onMouseEnter={() => setSelected(i)}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
-              background: i === selected ? 'rgba(110,125,255,0.12)' : 'transparent',
-              color: '#fff', transition: 'background 0.1s', WebkitAppRegion: 'no-drag',
+              background: i === selected ? 'var(--ds-accent-bg)' : 'transparent',
+              color: 'var(--ds-text-primary)', transition: 'background 0.1s', WebkitAppRegion: 'no-drag',
             }}>
             <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>
               {typeIcons[item.type] || '📄'}
@@ -109,18 +105,18 @@ export default function LauncherPanel({ isOpen, onClose, anchorRect }) {
               <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.name}
               </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 10, color: 'var(--ds-text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.path}
               </div>
             </div>
             {i === selected && (
-              <span style={{ fontSize: 10, color: 'rgba(110,125,255,0.6)', fontWeight: 600, flexShrink: 0 }}>Enter ↵</span>
+              <span style={{ fontSize: 10, color: 'var(--ds-accent-border)', fontWeight: 600, flexShrink: 0 }}>Enter ↵</span>
             )}
           </button>
         ))}
       </div>
 
-      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', flexShrink: 0 }}>
+      <div style={{ fontSize: 10, color: 'var(--ds-text-dim)', textAlign: 'center', flexShrink: 0 }}>
         ↑↓ Navigate · Enter to launch · Esc to close
       </div>
     </ResizablePanel>

@@ -2,6 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 export const PANEL_WIDTH = 420;
 
+/**
+ * The two canonical panel sizes. Every panel uses one of these (via the
+ * `size` prop on ResizablePanel) so the dock never shows a grab-bag of
+ * dimensions. STANDARD fits all content panels; WIDE is for the browser and
+ * terminal, which genuinely need the horizontal room.
+ */
+export const PANEL_SIZE_STANDARD = { width: 420, height: 480, minWidth: 340, minHeight: 320 };
+export const PANEL_SIZE_WIDE = { width: 720, height: 520, minWidth: 480, minHeight: 360 };
+
 export const PANEL_BASE_STYLE = {
   position: 'fixed',
   left: -9999, top: -9999,
@@ -9,11 +18,16 @@ export const PANEL_BASE_STYLE = {
   height: 480,
   maxHeight: '80vh',
   borderRadius: 16,
-  background: 'rgba(22, 24, 32, 0.95)',
-  border: '1px solid rgba(255, 255, 255, 0.07)',
-  boxShadow: '0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.2)',
+  // Frosted-glass surface: a near-opaque fill (--ds-bg-panel) plus a strong
+  // backdrop blur that softens any panel/dock content showing through behind
+  // it. One treatment for every panel — no per-panel background overrides.
+  background: 'var(--ds-bg-panel)',
+  backdropFilter: 'blur(40px) saturate(1.6)',
+  WebkitBackdropFilter: 'blur(40px) saturate(1.6)',
+  border: '1px solid var(--ds-border)',
+  boxShadow: 'var(--ds-shadow-panel)',
   padding: '14px 14px 12px',
-  color: 'white',
+  color: 'var(--ds-text-primary)',
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
@@ -35,24 +49,24 @@ export const HEADER_STYLE = {
 
 export const TITLE_STYLE = {
   fontSize: 14, fontWeight: 600, flex: 1, letterSpacing: '-0.01em',
-  color: '#fff',
+  color: 'var(--ds-text-primary)',
 };
 
 export const CLOSE_BTN = {
-  background: 'rgba(255, 255, 255, 0.06)',
-  border: '1px solid rgba(255, 255, 255, 0.06)',
+  background: 'var(--ds-bg-control)',
+  border: '1px solid var(--ds-border)',
   cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   borderRadius: 7, padding: '4px', flexShrink: 0,
-  color: 'rgba(255,255,255,0.35)', fontSize: 13, lineHeight: 1,
+  color: 'var(--ds-text-faint)', fontSize: 13, lineHeight: 1,
   transition: 'all 0.15s ease', WebkitAppRegion: 'no-drag',
   width: 24, height: 24,
 };
 
 export const INPUT_STYLE = {
-  background: 'rgba(255, 255, 255, 0.05)',
-  border: '1px solid rgba(255, 255, 255, 0.08)',
-  borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 12,
+  background: 'var(--ds-bg-input)',
+  border: '1px solid var(--ds-border)',
+  borderRadius: 8, padding: '8px 12px', color: 'var(--ds-text-primary)', fontSize: 12,
   outline: 'none', width: '100%', boxSizing: 'border-box',
   WebkitAppRegion: 'no-drag',
   transition: 'border-color 0.15s ease',
@@ -62,7 +76,7 @@ export const INPUT_STYLE = {
 export const SCROLL_AREA = {
   flex: 1, overflowY: 'auto', minHeight: 0,
   display: 'flex', flexDirection: 'column', gap: 4,
-  scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent',
+  scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-scrollbar-thumb) transparent',
   WebkitAppRegion: 'no-drag',
 };
 

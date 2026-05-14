@@ -86,19 +86,10 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
 
   if (!isOpen || !anchorRect) return null;
 
-  const panelWidth = 360;
-
   const panel = (
     <ResizablePanel
       isOpen={isOpen}
       dockAction="folder"
-      defaultWidth={360}
-      defaultHeight={360}
-      minWidth={300}
-      minHeight={200}
-      style={{
-        background: 'radial-gradient(circle at top left, #202733, #12141a)',
-      }}
     >
       <div style={HEADER_STYLE}>
         <div style={TITLE_STYLE}>🗂️ Workspaces</div>
@@ -109,7 +100,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
         <div
           style={{
             fontSize: 12,
-            color: 'rgba(255,255,255,0.7)',
+            color: 'var(--ds-text-secondary)',
             flex: 1,
           }}
         >
@@ -123,7 +114,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
             borderRadius: 8,
             border: 'none',
             background: loading
-              ? 'rgba(255,255,255,0.15)'
+              ? 'var(--ds-bg-hover)'
               : 'linear-gradient(135deg, #4ac1ff, #6e7dff)',
             color: 'white',
             fontSize: 13,
@@ -134,14 +125,14 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
         </button>
       </div>
 
-      {error && <div style={{ color: '#ff6b6b', fontSize: 12 }}>{error}</div>}
+      {error && <div style={{ color: 'var(--ds-danger)', fontSize: 12 }}>{error}</div>}
 
       <div
         style={{
           flex: 1,
           overflowY: 'auto',
           borderRadius: 8,
-          background: 'rgba(0,0,0,0.25)',
+          background: 'var(--ds-bg-subtle)',
           padding: 6,
         }}
       >
@@ -149,7 +140,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
           <div
             style={{
               fontSize: 13,
-              color: 'rgba(255,255,255,0.6)',
+              color: 'var(--ds-text-muted)',
               textAlign: 'center',
               padding: 16,
             }}
@@ -166,7 +157,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
                 padding: '6px 8px',
                 borderRadius: 6,
                 marginBottom: 4,
-                background: 'rgba(255,255,255,0.03)',
+                background: 'var(--ds-bg-subtle)',
                 gap: 8,
               }}
             >
@@ -182,7 +173,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
                 >
                   {ws.name}
                 </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                <div style={{ fontSize: 11, color: 'var(--ds-text-muted)' }}>
                   {formatDate(ws.createdAt)}
                 </div>
               </div>
@@ -208,8 +199,8 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
                   padding: '4px 6px',
                   borderRadius: 6,
                   border: 'none',
-                  background: 'rgba(255, 107, 107, 0.2)',
-                  color: '#ff8787',
+                  background: 'var(--ds-danger-bg)',
+                  color: 'var(--ds-danger-text)',
                   fontSize: 11,
                   cursor: loading ? 'default' : 'pointer',
                 }}

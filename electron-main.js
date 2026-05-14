@@ -10,6 +10,8 @@ import { SnapshotManager } from './src/workspace/SnapshotManager.js';
 import { WindowTracker } from './src/workspace/WindowTracker.js';
 import { TerminalManager } from './src/workspace/TerminalManager.js';
 import { readJson, writeJsonAtomic, setCorruptionNotifier } from './electron-persistence.js';
+import { setSecret, getSecret, hasSecret, deleteSecret, listSecrets, isEncryptionAvailable } from './electron-secrets.js';
+import { PROVIDER_LIST, getProvider } from './electron-ai-providers.js';
 // electron-updater is CommonJS — interop via the default import.
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
@@ -402,6 +404,32 @@ let snapshotManager = null;
 const windowTracker = new WindowTracker();
 const terminalManager = new TerminalManager();
 
+// ─── Dock window geometry ─────────────────────────────────────────────────────
+// The dock has two states:
+//   collapsed — a small window flush against one screen edge; only the dock
+//               bar is visible (the surrounding window area is transparent).
+//   expanded  — a fullscreen transparent window, so panels have room to open.
+// The collapsed window deliberately HUGS the screen edge (no gap) — the visual
+// margin comes entirely from CSS padding. That keeps the dock bar at the exact
+// same screen position in both states, so it never visibly jumps when a panel
+// opens. The renderer aligns the bar within the window via `data-dock-pos`.
+const DOCK_W = 520;
+const DOCK_H = 140;
+
+/** Collapsed-state window bounds for a given dock position. */
+function computeDockBounds(position) {
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+  const centerX = Math.round((sw - DOCK_W) / 2);
+  const map = {
+    'bottom-center': { x: centerX, y: sh - DOCK_H },
+    'bottom-left': { x: 0, y: sh - DOCK_H },
+    'bottom-right': { x: sw - DOCK_W, y: sh - DOCK_H },
+    'top-center': { x: centerX, y: 0 },
+  };
+  const pos = map[position] || map['bottom-center'];
+  return { x: pos.x, y: pos.y, width: DOCK_W, height: DOCK_H };
+}
+
 function getSnapshotManager() {
   if (!snapshotManager) {
     const workspaceDir = path.join(app.getPath('userData'), 'workspaces');
@@ -412,14 +440,15 @@ function getSnapshotManager() {
 }
 
 function createWindow() {
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  // Start in the collapsed position for the saved dock position (default
+  // bottom-center). applySettings() re-applies it below, harmlessly.
+  const initialBounds = computeDockBounds(readSettings().dockPosition || 'bottom-center');
 
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 140,
-    // Default: horizontally centered, slightly above the bottom taskbar
-    x: Math.round(screenWidth / 2 - 240),
-    y: screenHeight - 150,
+    width: initialBounds.width,
+    height: initialBounds.height,
+    x: initialBounds.x,
+    y: initialBounds.y,
     // important for clean overlay on Windows
     frame: false,
     transparent: true,
@@ -443,6 +472,9 @@ function createWindow() {
   const indexPath = isDevelopment
     ? `http://localhost:${devPort}`
     : `file://${path.join(__dirname, 'dist', 'index.html')}`;
+
+  // Remember where to return to when a panel closes.
+  mainWindow.collapsedBounds = initialBounds;
 
   mainWindow.loadURL(indexPath);
   mainWindow.show();
@@ -590,25 +622,21 @@ ipcMain.handle('dock:applyLayout', async (_event, { layout }) => {
   return { ok: true };
 });
 
-// Expand/collapse dock window height for workspace UI
+// Expand the window to fullscreen (so panels have room) / collapse it back to
+// the small dock-bar window. The dock bar itself doesn't move on screen — the
+// renderer keeps it pinned via CSS — so this is purely about the hit-testable
+// window area.
 ipcMain.handle('dock:setExpanded', async (_event, { expanded }) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
-
   const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
-  const currentBounds = mainWindow.getBounds();
 
   if (expanded) {
-    if (!mainWindow.collapsedBounds) {
-      mainWindow.collapsedBounds = currentBounds;
-    }
+    // Snapshot where to return to, in case applyDockPosition never ran.
+    if (!mainWindow.collapsedBounds) mainWindow.collapsedBounds = mainWindow.getBounds();
     mainWindow.setResizable(true);
     mainWindow.setBounds({ x: 0, y: 0, width: screenWidth, height: screenHeight });
   } else {
-    const bounds = mainWindow.collapsedBounds || {
-      x: Math.round(screenWidth / 2 - 240),
-      y: screenHeight - 150,
-      width: 480, height: 140
-    };
+    const bounds = mainWindow.collapsedBounds || computeDockBounds('bottom-center');
     mainWindow.setBounds(bounds);
     mainWindow.setResizable(false);
   }
@@ -659,55 +687,126 @@ ipcMain.handle('notes:togglePin', (_e, { id }) => {
   return { ok: true };
 });
 
-// ─── AI Chat IPC (Google GenAI) ───────────────────────────────────────────────
-let genaiInstance = null;
-async function getGenAI() {
-  if (genaiInstance) return genaiInstance;
-  const { GoogleGenAI } = await import('@google/genai');
-  const apiKey = process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_api_key_here') throw new Error('API key not configured in .env');
-  genaiInstance = new GoogleGenAI({ apiKey });
-  return genaiInstance;
+// ─── AI Chat IPC (multi-provider) ─────────────────────────────────────────────
+//
+// Provider selection lives in settings.json (`aiProvider`, `aiModel`). API
+// keys live in the encrypted secrets store — except Gemini, which also accepts
+// a `.env` VITE_GEMINI_API_KEY as a dev-time override so existing setups keep
+// working without re-entering the key.
+
+/** Resolve the API key for a provider: secrets store first, .env fallback for Gemini. */
+function resolveApiKey(provider) {
+  if (provider.keyless) return '';
+  const stored = getSecret(provider.keyName);
+  if (stored) return stored;
+  if (provider.id === 'gemini') {
+    const envKey = process.env.VITE_GEMINI_API_KEY;
+    if (envKey && envKey !== 'your_api_key_here') return envKey;
+  }
+  return null;
 }
 
-// Lightweight check the renderer uses to gate the AI panel before a user
-// can type a prompt that would only fail.
+/** The provider + model the user has selected (with sane defaults). */
+function getActiveProvider() {
+  const settings = readSettings();
+  const provider = getProvider(settings.aiProvider) || getProvider('gemini');
+  const model = settings.aiModel || provider.defaultModel;
+  return { provider, model };
+}
+
+/** True if a provider is ready to use (keyless, or has a resolvable key). */
+function providerReady(provider) {
+  return provider.keyless || resolveApiKey(provider) !== null;
+}
+
+// Renderer gates the AI panel on this before letting a user type a doomed prompt.
 ipcMain.handle('ai:status', () => {
-  const apiKey = process.env.VITE_GEMINI_API_KEY;
-  return { hasKey: !!apiKey && apiKey !== 'your_api_key_here' };
+  const { provider, model } = getActiveProvider();
+  return {
+    hasKey: providerReady(provider),
+    provider: provider.id,
+    providerLabel: provider.label,
+    model,
+  };
 });
 
+// Static provider catalog for the Settings "AI / Models" picker.
+ipcMain.handle('ai:providers', () => ({
+  providers: PROVIDER_LIST,
+  encryptionAvailable: isEncryptionAvailable(),
+}));
+
+/** Run a chat turn on the active provider. `onChunk` may be undefined. */
+async function runChat(prompt, onChunk, signal) {
+  const { provider, model } = getActiveProvider();
+  const apiKey = resolveApiKey(provider);
+  if (!provider.keyless && apiKey === null) {
+    throw new Error(`No API key configured for ${provider.label}. Add one in Settings.`);
+  }
+  return provider.chat({ apiKey, model, prompt, onChunk, signal });
+}
+
+// Non-streaming chat — kept for callers that just want the final text.
 ipcMain.handle('ai:chat', async (_e, { prompt }) => {
-  const ai = await getGenAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-  });
-  return { text: response.text || 'No response.' };
+  const text = await runChat(prompt);
+  return { text: text || 'No response.' };
+});
+
+// Streaming chat. The renderer calls this, then listens on the push channels
+// `ai:streamChunk` / `ai:streamDone` / `ai:streamError`, all tagged with the
+// `streamId` returned here so multiple panels could stream independently.
+let _streamSeq = 0;
+ipcMain.handle('ai:chatStream', async (e, { prompt }) => {
+  const streamId = `s${++_streamSeq}`;
+  const send = (channel, payload) => {
+    if (e.sender && !e.sender.isDestroyed()) e.sender.send(channel, { streamId, ...payload });
+  };
+  // Run detached — resolve the invoke immediately with the id so the renderer
+  // can start listening; chunks arrive over the push channels.
+  (async () => {
+    try {
+      const text = await runChat(prompt, (delta) => send('ai:streamChunk', { delta }));
+      send('ai:streamDone', { text: text || 'No response.' });
+    } catch (err) {
+      console.error('[AI:chatStream] Error:', err.message);
+      send('ai:streamError', { error: err.message || 'Failed to get response' });
+    }
+  })();
+  return { streamId };
 });
 
 ipcMain.handle('ai:transcribe', async (_e, { audio, language }) => {
   try {
-    const ai = await getGenAI();
-    const audioBuffer = Buffer.from(audio, 'base64');
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType: 'audio/webm', data: audio } },
-            { text: `Transcribe this audio to text. The language is ${language || 'en'}. Return ONLY the transcribed text, nothing else.` },
-          ],
-        },
-      ],
+    // Prefer the active provider if it can transcribe; otherwise fall back to
+    // any configured provider that can (Gemini or OpenAI).
+    const { provider: active } = getActiveProvider();
+    let provider = active.canTranscribe && providerReady(active) ? active : null;
+    if (!provider) {
+      provider = [getProvider('gemini'), getProvider('openai')]
+        .find(p => p && p.canTranscribe && providerReady(p)) || null;
+    }
+    if (!provider) {
+      throw new Error('No transcription-capable provider configured (needs Gemini or OpenAI).');
+    }
+    const text = await provider.transcribe({
+      apiKey: resolveApiKey(provider),
+      audioBase64: audio,
+      language: language || 'en',
     });
-    return { text: response.text || '' };
+    return { text: text || '' };
   } catch (err) {
     console.error('[AI:Transcribe] Error:', err.message);
     throw new Error('Transcription failed: ' + (err.message || 'Unknown error'));
   }
 });
+
+// ─── Secrets IPC ──────────────────────────────────────────────────────────────
+// The renderer can set / check / delete / list secret NAMES only — a raw key
+// value is never returned across this boundary.
+ipcMain.handle('secrets:set', (_e, { name, value }) => setSecret(name, value));
+ipcMain.handle('secrets:has', (_e, { name }) => ({ has: hasSecret(name) }));
+ipcMain.handle('secrets:delete', (_e, { name }) => { deleteSecret(name); return { ok: true }; });
+ipcMain.handle('secrets:list', () => ({ names: listSecrets() }));
 
 // ─── Screenshot IPC ───────────────────────────────────────────────────────────
 const screenshotsDir = () => path.join(app.getPath('userData'), 'screenshots');
@@ -816,21 +915,26 @@ function readSettings() {
   return readJson(settingsFile(), {});
 }
 
-/** Move the dock window to one of the four preset positions. */
+/**
+ * Move the dock to one of the four preset positions.
+ *
+ * Updates `collapsedBounds` (where the window returns to when no panel is
+ * open) and broadcasts the position to the renderer so it can align the dock
+ * bar to match. The window is only moved *now* if the dock is collapsed — if
+ * a panel is open the window is fullscreen and will pick up the new
+ * collapsedBounds when it next collapses. This is the fix for the position
+ * setting doing nothing when changed from the (open) Settings panel.
+ */
 function applyDockPosition(position) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  const { width: w, height: h } = mainWindow.getBounds();
-  const margin = 20;
-  const centerX = Math.round((sw - w) / 2);
-  const positions = {
-    'bottom-center': { x: centerX, y: sh - h - margin },
-    'bottom-right': { x: sw - w - margin, y: sh - h - margin },
-    'bottom-left': { x: margin, y: sh - h - margin },
-    'top-center': { x: centerX, y: margin },
-  };
-  const pos = positions[position];
-  if (pos) mainWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h });
+  const bounds = computeDockBounds(position);
+  mainWindow.collapsedBounds = bounds;
+  if (!isDockExpanded) {
+    mainWindow.setBounds(bounds);
+  }
+  if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('dock:positionChanged', position);
+  }
 }
 
 /**
@@ -857,7 +961,11 @@ function applySettings(settings) {
 
 ipcMain.handle('settings:get', () => readSettings());
 ipcMain.handle('settings:set', (_e, { settings }) => {
-  writeJsonAtomic(settingsFile(), settings);
+  // Merge rather than overwrite: callers (Settings panel, ThemeContext, …)
+  // each own only a subset of keys, so a partial write must not wipe the rest.
+  writeJsonAtomic(settingsFile(), { ...readSettings(), ...settings });
+  // Apply only what changed — applySettings guards each key by presence, so
+  // toggling the theme won't, say, re-snap a window the user dragged.
   applySettings(settings);
   return { ok: true };
 });

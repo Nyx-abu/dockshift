@@ -76,11 +76,14 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
           width: 340,
           maxWidth: '90vw',
           borderRadius: 14,
-          background: 'radial-gradient(circle at top left, #202733, #12141a)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: 'none',
+          // Same frosted-glass surface as the dock panels.
+          background: 'var(--ds-bg-panel)',
+          backdropFilter: 'blur(40px) saturate(1.6)',
+          WebkitBackdropFilter: 'blur(40px) saturate(1.6)',
+          border: '1px solid var(--ds-border-strong)',
+          boxShadow: 'var(--ds-shadow-panel)',
           padding: 16,
-          color: 'white',
+          color: 'var(--ds-text-primary)',
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
@@ -101,7 +104,7 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
             style={{
               border: 'none',
               background: 'transparent',
-              color: 'rgba(255,255,255,0.65)',
+              color: 'var(--ds-text-muted)',
               cursor: 'pointer',
               fontSize: 18,
             }}
@@ -114,7 +117,7 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
         <label
           style={{
             fontSize: 12,
-            color: 'rgba(255,255,255,0.7)',
+            color: 'var(--ds-text-secondary)',
             marginBottom: 2,
           }}
         >
@@ -130,9 +133,9 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
             width: '100%',
             padding: '7px 9px',
             borderRadius: 8,
-            border: '1px solid rgba(255,255,255,0.2)',
-            background: 'rgba(0,0,0,0.45)',
-            color: 'white',
+            border: '1px solid var(--ds-border-strong)',
+            background: 'var(--ds-bg-subtle)',
+            color: 'var(--ds-text-primary)',
             fontSize: 13,
             outline: 'none',
           }}
@@ -153,8 +156,8 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
               padding: '6px 10px',
               borderRadius: 999,
               border: 'none',
-              background: 'rgba(255,255,255,0.08)',
-              color: 'rgba(255,255,255,0.8)',
+              background: 'var(--ds-bg-hover)',
+              color: 'var(--ds-text-secondary)',
               fontSize: 12,
               cursor: 'pointer',
             }}
@@ -170,9 +173,9 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
               borderRadius: 999,
               border: 'none',
               background: !name.trim()
-                ? 'rgba(255,255,255,0.18)'
+                ? 'var(--ds-bg-hover)'
                 : 'linear-gradient(135deg, #4ac1ff, #6e7dff)',
-              color: 'white',
+              color: 'var(--ds-text-primary)',
               fontSize: 12,
               cursor: !name.trim() ? 'default' : 'pointer',
             }}

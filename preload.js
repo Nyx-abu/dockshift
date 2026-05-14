@@ -39,8 +39,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notes:togglePin',
       // AI
       'ai:status',
+      'ai:providers',
       'ai:chat',
+      'ai:chatStream',
       'ai:transcribe',
+      // Secrets (encrypted API key storage — names only cross this boundary)
+      'secrets:set',
+      'secrets:has',
+      'secrets:delete',
+      'secrets:list',
       // Screenshots
       'screenshot:capture',
       'screenshot:getSources',
@@ -78,6 +85,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('workspace:dockLayoutRestore', handler);
     return () => ipcRenderer.removeListener('workspace:dockLayoutRestore', handler);
   },
+  // Main process tells the renderer which screen edge the dock should align to
+  // (changed from Settings, or applied at startup).
+  onDockPosition: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('dock:positionChanged', handler);
+    return () => ipcRenderer.removeListener('dock:positionChanged', handler);
+  },
   onClipboardUpdate: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('clipboard:newItem', handler);
@@ -87,6 +101,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('terminal:onData', handler);
     return () => ipcRenderer.removeListener('terminal:onData', handler);
+  },
+  // Streaming AI chat: main pushes chunk/done/error events, each tagged with
+  // the streamId returned by the ai:chatStream invoke. One subscription wires
+  // up all three; the returned function unsubscribes them together.
+  onAiStream: (callbacks) => {
+    const onChunk = (event, data) => callbacks.onChunk?.(data);
+    const onDone = (event, data) => callbacks.onDone?.(data);
+    const onError = (event, data) => callbacks.onError?.(data);
+    ipcRenderer.on('ai:streamChunk', onChunk);
+    ipcRenderer.on('ai:streamDone', onDone);
+    ipcRenderer.on('ai:streamError', onError);
+    return () => {
+      ipcRenderer.removeListener('ai:streamChunk', onChunk);
+      ipcRenderer.removeListener('ai:streamDone', onDone);
+      ipcRenderer.removeListener('ai:streamError', onError);
+    };
   },
   clipboard: {
     copy: (text) => ipcRenderer.invoke('clipboard:copy', text),

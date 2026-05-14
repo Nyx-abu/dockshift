@@ -40,15 +40,15 @@ function TBtn({ onClick, active, title, children, style }) {
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
         ...TB_BASE,
-        background: active ? 'rgba(110,125,255,0.2)' : hovered ? 'rgba(255,255,255,0.08)' : 'none',
-        color: active ? '#9aa5ff' : 'rgba(255,255,255,0.55)',
+        background: active ? 'var(--ds-accent-bg)' : hovered ? 'var(--ds-bg-hover)' : 'none',
+        color: active ? 'var(--ds-accent-light)' : 'var(--ds-text-muted)',
         ...style,
       }}>{children}</button>
   );
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.1)', margin: '0 2px', flexShrink: 0 }} />;
+  return <div style={{ width: 1, height: 16, background: 'var(--ds-border)', margin: '0 2px', flexShrink: 0 }} />;
 }
 
 // ─── Note Card (List View) ───────────────────────────────────────────────────
@@ -63,23 +63,23 @@ function NoteCard({ note, onClick, onPin, onDelete }) {
     <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
         padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-        background: hovered ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s', WebkitAppRegion: 'no-drag',
+        background: hovered ? 'var(--ds-bg-control)' : 'var(--ds-bg-subtle)',
+        border: '1px solid var(--ds-border)', transition: 'background 0.15s', WebkitAppRegion: 'no-drag',
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {note.pinned && <span style={{ fontSize: 10 }}>📌</span>}
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ds-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {note.title || 'Untitled'}
         </span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{time}</span>
+        <span style={{ fontSize: 10, color: 'var(--ds-text-faint)' }}>{time}</span>
         <button onClick={e => { e.stopPropagation(); onPin(); }} title={note.pinned ? 'Unpin' : 'Pin'}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: note.pinned ? '#ffd166' : 'rgba(255,255,255,0.2)', fontSize: 12, WebkitAppRegion: 'no-drag' }}>📌</button>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: note.pinned ? '#ffd166' : 'var(--ds-text-dim)', fontSize: 12, WebkitAppRegion: 'no-drag' }}>📌</button>
         <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'rgba(255,255,255,0.25)', fontSize: 12, WebkitAppRegion: 'no-drag' }}
-          onMouseEnter={e => e.currentTarget.style.color = '#ff6b6b'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}>✕</button>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--ds-text-dim)', fontSize: 12, WebkitAppRegion: 'no-drag' }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-danger)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-dim)'}>✕</button>
       </div>
-      <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview}</p>
+      <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ds-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview}</p>
     </div>
   );
 }
@@ -291,32 +291,25 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
     <ResizablePanel
       isOpen={isOpen}
       dockAction="notes"
-      defaultWidth={420}
-      defaultHeight={480}
-      minWidth={300}
-      minHeight={300}
-      style={{
-        background: 'radial-gradient(circle at top left, #1e2330, #111418)',
-      }}
     >
       {/* ── Header ── */}
       <div style={HEADER_STYLE}>
         {view === 'editor' && (
           <button onClick={() => { flushAutoSave(); setView('list'); setEditNote(null); setShowColors(false); loadedNoteId.current = null; }}
-            style={{ ...CLOSE_BTN, color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>←</button>
+            style={{ ...CLOSE_BTN, color: 'var(--ds-text-muted)', fontSize: 14 }}>←</button>
         )}
         <span style={TITLE_STYLE}>{view === 'editor' ? (editNote?.id ? 'Edit Note' : 'New Note') : '📝 Quick Notes'}</span>
         {view === 'list' && (
           <button onClick={() => { setEditNote({ id: null, title: '', body: '', pinned: false, fontSize: 13 }); setView('editor'); loadedNoteId.current = null; }}
             style={{
-              background: 'rgba(110,125,255,0.15)', border: '1px solid rgba(110,125,255,0.25)',
-              borderRadius: 6, color: '#9aa5ff', fontSize: 11, padding: '4px 10px',
+              background: 'var(--ds-accent-bg)', border: '1px solid var(--ds-accent-border)',
+              borderRadius: 6, color: 'var(--ds-accent-light)', fontSize: 11, padding: '4px 10px',
               cursor: 'pointer', fontWeight: 600, WebkitAppRegion: 'no-drag',
             }}>+ New</button>
         )}
         <button onClick={onClose} style={CLOSE_BTN}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>✕</button>
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--ds-text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-faint)'}>✕</button>
       </div>
 
       {view === 'list' ? (
@@ -324,11 +317,11 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
         <>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes..." style={INPUT_STYLE} />
           <div style={SCROLL_AREA}>
-            {loading && <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', padding: 24 }}>Loading…</p>}
+            {loading && <p style={{ color: 'var(--ds-text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>Loading…</p>}
             {!loading && sorted.length === 0 && (
               <div style={{ textAlign: 'center', padding: 32 }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📝</div>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>{search ? 'No matching notes.' : 'No notes yet. Click + New to create one.'}</p>
+                <p style={{ color: 'var(--ds-text-faint)', fontSize: 12 }}>{search ? 'No matching notes.' : 'No notes yet. Click + New to create one.'}</p>
               </div>
             )}
             {!loading && sorted.map(note => (
@@ -350,7 +343,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
           {/* ── Formatting Toolbar ── */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0,
-            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+            background: 'var(--ds-bg-subtle)', border: '1px solid var(--ds-border)',
             borderRadius: 8, padding: '3px 6px', flexWrap: 'wrap', WebkitAppRegion: 'no-drag',
           }}>
             {/* Text styling */}
@@ -440,12 +433,12 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
                   title={c.label}
                   style={{
                     width: 24, height: 24, borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,0.12)',
+                    border: '2px solid var(--ds-border-strong)',
                     background: c.css, cursor: 'pointer', padding: 0, flexShrink: 0,
                     transition: 'all 0.15s', WebkitAppRegion: 'no-drag',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.borderColor = 'var(--ds-text-faint)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'var(--ds-border-strong)'; }}
                 />
               ))}
             </div>
@@ -461,11 +454,11 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             onInput={scheduleAutoSave}
             style={{
               flex: 1, overflowY: 'auto', minHeight: 0,
-              background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--ds-bg-subtle)', border: '1px solid var(--ds-border)',
               borderRadius: 10, padding: 12,
-              color: 'rgba(255,255,255,0.85)', fontSize: fontSize, lineHeight: 1.65,
+              color: 'var(--ds-text-secondary)', fontSize: fontSize, lineHeight: 1.65,
               fontFamily: 'inherit',
-              scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent',
+              scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-text-dim) transparent',
               WebkitAppRegion: 'no-drag',
             }}
           />
@@ -473,22 +466,22 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
             <span style={{
-              fontSize: 10.5, color: 'rgba(255,255,255,0.3)', minWidth: 54,
+              fontSize: 10.5, color: 'var(--ds-text-faint)', minWidth: 54,
               transition: 'opacity 0.2s',
             }}>
               {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : ''}
             </span>
             <button onClick={handleSave} disabled={!editNote?.title?.trim()} style={{
               flex: 1, padding: '8px 0', borderRadius: 8,
-              background: editNote?.title?.trim() ? 'rgba(110,125,255,0.15)' : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${editNote?.title?.trim() ? 'rgba(110,125,255,0.25)' : 'rgba(255,255,255,0.08)'}`,
-              color: editNote?.title?.trim() ? '#9aa5ff' : 'rgba(255,255,255,0.2)',
+              background: editNote?.title?.trim() ? 'var(--ds-accent-bg)' : 'var(--ds-bg-input)',
+              border: `1px solid ${editNote?.title?.trim() ? 'var(--ds-accent-border)' : 'var(--ds-border)'}`,
+              color: editNote?.title?.trim() ? 'var(--ds-accent-light)' : 'var(--ds-text-dim)',
               fontSize: 12, fontWeight: 600, cursor: editNote?.title?.trim() ? 'pointer' : 'default', WebkitAppRegion: 'no-drag',
             }}>Save Note</button>
             {editNote?.id && (
               <button onClick={() => handleDelete(editNote.id)} style={{
-                padding: '8px 16px', borderRadius: 8, background: 'rgba(255,107,107,0.1)',
-                border: '1px solid rgba(255,107,107,0.18)', color: '#ff8787', fontSize: 12,
+                padding: '8px 16px', borderRadius: 8, background: 'var(--ds-danger-bg)',
+                border: '1px solid var(--ds-danger-border)', color: 'var(--ds-danger-text)', fontSize: 12,
                 fontWeight: 600, cursor: 'pointer', WebkitAppRegion: 'no-drag',
               }}>Delete</button>
             )}

@@ -10,6 +10,10 @@ export default function App() {
     activeTabId: null,
   });
   const [restoreAnim, setRestoreAnim] = useState(false);
+  // Which screen edge the dock bar aligns to. Drives the data-dock-pos
+  // attribute below; CSS does the actual alignment. Kept in sync with the
+  // main process so changing it in Settings takes effect live.
+  const [dockPos, setDockPos] = useState('bottom-center');
 
   const api = useMemo(() => window.electronAPI, []);
 
@@ -49,9 +53,20 @@ export default function App() {
     return unsubscribe;
   }, [api]);
 
+  // Track the dock position: load the saved value once, then follow live
+  // updates the main process pushes when it changes in Settings.
+  useEffect(() => {
+    if (!api) return undefined;
+    api.invoke?.('settings:get')
+      ?.then(s => { if (s?.dockPosition) setDockPos(s.dockPosition); })
+      ?.catch(() => {});
+    return api.onDockPosition?.((pos) => { if (pos) setDockPos(pos); });
+  }, [api]);
+
   return (
     <div
       className={`dock-container ${restoreAnim ? 'layout-restore' : ''}`}
+      data-dock-pos={dockPos}
       style={{
         transition: 'width 180ms ease',
       }}
