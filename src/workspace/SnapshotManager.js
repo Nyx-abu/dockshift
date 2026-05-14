@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readJson, writeJsonAtomic } from '../../electron-persistence.js';
 
 /**
  * @typedef {Object} AppWindowSnapshot
@@ -48,10 +49,39 @@ export class SnapshotManager {
   }
 
   /**
+   * Sanitize a user-supplied workspace name into a safe filename component.
+   * Strips any path separators and rejects anything outside a conservative
+   * allowlist — prevents path traversal (e.g. `../../etc/hosts`) since the
+   * name flows straight into a filesystem path.
+   * @param {string} name
+   * @returns {string} safe name (no extension, no separators)
+   */
+  static sanitizeName(name) {
+    if (typeof name !== 'string') {
+      throw new Error('Workspace name must be a string');
+    }
+    // Collapse to a bare filename — drops directory components and traversal.
+    const base = path.basename(name.trim());
+    if (!base || base === '.' || base === '..') {
+      throw new Error('Invalid workspace name');
+    }
+    if (!/^[A-Za-z0-9-_ ]+$/.test(base)) {
+      throw new Error(
+        'Workspace name may only contain letters, numbers, spaces, hyphens and underscores'
+      );
+    }
+    if (base.length > 100) {
+      throw new Error('Workspace name is too long');
+    }
+    return base;
+  }
+
+  /**
    * @param {string} name
    */
   getSnapshotPath(name) {
-    return path.join(this.baseDir, `${name}.json`);
+    const safe = SnapshotManager.sanitizeName(name);
+    return path.join(this.baseDir, `${safe}.json`);
   }
 
   /**
@@ -64,9 +94,7 @@ export class SnapshotManager {
       this.ensureDir();
       const filePath = this.getSnapshotPath(name);
       console.log('[Workspace] Saving to:', filePath);
-      console.log('[Workspace] Snapshot data:', snapshot);
-      const json = JSON.stringify(snapshot, null, 2);
-      fs.writeFileSync(filePath, json, 'utf8');
+      writeJsonAtomic(filePath, snapshot);
       console.log('[Workspace] Save successful');
       return filePath;
     } catch (err) {
@@ -101,14 +129,10 @@ export class SnapshotManager {
     for (const file of files) {
       if (!file.endsWith('.json')) continue;
       const full = path.join(this.baseDir, file);
-      try {
-        const content = fs.readFileSync(full, 'utf8');
-        const parsed = /** @type {WorkspaceSnapshot} */ (JSON.parse(content));
-        snapshots.push(parsed);
-      } catch (err) {
-        console.error('[Workspace] Failed to read/parse snapshot:', full, err);
-        // continue with other files – but do not swallow the error silently
-      }
+      // readJson backs up corrupted snapshots to `.corrupt-<ts>` and notifies,
+      // rather than silently dropping them. `null` => unreadable, skip it.
+      const parsed = readJson(full, null);
+      if (parsed) snapshots.push(/** @type {WorkspaceSnapshot} */ (parsed));
     }
     snapshots.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -124,14 +148,9 @@ export class SnapshotManager {
     this.ensureDir();
     const filePath = this.getSnapshotPath(name);
     console.log('[Workspace] Loading snapshot from:', filePath);
-    try {
-      const content = fs.readFileSync(filePath, 'utf8');
-      return /** @type {WorkspaceSnapshot} */ (JSON.parse(content));
-    } catch (err) {
-      if (err && err.code === 'ENOENT') return null;
-      console.error('[Workspace] loadSnapshot error:', err);
-      throw err;
-    }
+    // readJson returns null for both missing and corrupted files; a corrupted
+    // file is preserved as a `.corrupt-<ts>` backup with a user notification.
+    return /** @type {WorkspaceSnapshot|null} */ (readJson(filePath, null));
   }
 
   /**

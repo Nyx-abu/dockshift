@@ -1,0 +1,113 @@
+/* ═══════════════════════════════════════════════════════════════
+   DockShift — Theme tokens
+
+   Every color in the app should resolve to one of these custom
+   properties so light/dark (and future re-theming) is a single
+   `data-theme` swap on <html>. ThemeContext sets that attribute.
+
+   `:root` defaults to dark — the app's original look — so anything
+   not yet migrated still renders correctly.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --ds-bg-panel: rgba(22, 24, 32, 0.95);
+  --ds-bg-panel-gradient: radial-gradient(circle at top left, #1e2330, #111418);
+  --ds-bg-dock: rgba(28, 30, 38, 0.92);
+  --ds-bg-elevated: #1a1c24;
+  --ds-bg-input: rgba(255, 255, 255, 0.05);
+  --ds-bg-subtle: rgba(255, 255, 255, 0.03);
+  --ds-bg-control: rgba(255, 255, 255, 0.06);
+  --ds-bg-hover: rgba(255, 255, 255, 0.08);
+  --ds-bg-tooltip: rgba(15, 17, 22, 0.95);
+
+  /* Text */
+  --ds-text-primary: #ffffff;
+  --ds-text-secondary: rgba(255, 255, 255, 0.85);
+  --ds-text-muted: rgba(255, 255, 255, 0.55);
+  --ds-text-faint: rgba(255, 255, 255, 0.35);
+  --ds-text-dim: rgba(255, 255, 255, 0.25);
+
+  /* Borders */
+  --ds-border: rgba(255, 255, 255, 0.07);
+  --ds-border-subtle: rgba(255, 255, 255, 0.05);
+  --ds-border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Accent (indigo / cyan) */
+  --ds-accent: #6e7dff;
+  --ds-accent-light: #9aa5ff;
+  --ds-accent-cyan: #4ac1ff;
+  --ds-accent-bg: rgba(110, 125, 255, 0.15);
+  --ds-accent-bg-soft: rgba(110, 125, 255, 0.08);
+  --ds-accent-border: rgba(110, 125, 255, 0.25);
+
+  /* Status */
+  --ds-danger: #ff6b6b;
+  --ds-danger-text: #ff8787;
+  --ds-danger-bg: rgba(255, 59, 48, 0.15);
+  --ds-danger-border: rgba(255, 59, 48, 0.3);
+  --ds-success: #22c55e;
+  --ds-success-bg: rgba(34, 197, 94, 0.12);
+  --ds-success-border: rgba(34, 197, 94, 0.2);
+  --ds-warning: #ffd166;
+
+  /* Effects */
+  --ds-shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.2);
+  --ds-shadow-dock: 0 6px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --ds-shadow-tooltip: 0 3px 10px rgba(0, 0, 0, 0.3);
+  --ds-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --ds-bg-panel: rgba(248, 249, 251, 0.97);
+  --ds-bg-panel-gradient: radial-gradient(circle at top left, #ffffff, #eef0f4);
+  --ds-bg-dock: rgba(255, 255, 255, 0.95);
+  --ds-bg-elevated: #ffffff;
+  --ds-bg-input: rgba(0, 0, 0, 0.04);
+  --ds-bg-subtle: rgba(0, 0, 0, 0.025);
+  --ds-bg-control: rgba(0, 0, 0, 0.05);
+  --ds-bg-hover: rgba(0, 0, 0, 0.06);
+  --ds-bg-tooltip: rgba(33, 35, 42, 0.96);
+
+  /* Text */
+  --ds-text-primary: #1a1c24;
+  --ds-text-secondary: rgba(26, 28, 36, 0.82);
+  --ds-text-muted: rgba(26, 28, 36, 0.58);
+  --ds-text-faint: rgba(26, 28, 36, 0.42);
+  --ds-text-dim: rgba(26, 28, 36, 0.3);
+
+  /* Borders */
+  --ds-border: rgba(0, 0, 0, 0.1);
+  --ds-border-subtle: rgba(0, 0, 0, 0.06);
+  --ds-border-strong: rgba(0, 0, 0, 0.16);
+
+  /* Accent (indigo / cyan) — nudged darker for contrast on light */
+  --ds-accent: #5562e8;
+  --ds-accent-light: #5562e8;
+  --ds-accent-cyan: #2092cf;
+  --ds-accent-bg: rgba(85, 98, 232, 0.12);
+  --ds-accent-bg-soft: rgba(85, 98, 232, 0.07);
+  --ds-accent-border: rgba(85, 98, 232, 0.3);
+
+  /* Status */
+  --ds-danger: #e5484d;
+  --ds-danger-text: #cf2c31;
+  --ds-danger-bg: rgba(229, 72, 77, 0.12);
+  --ds-danger-border: rgba(229, 72, 77, 0.32);
+  --ds-success: #2a9d4e;
+  --ds-success-bg: rgba(42, 157, 78, 0.12);
+  --ds-success-border: rgba(42, 157, 78, 0.25);
+  --ds-warning: #c98a00;
+
+  /* Effects */
+  --ds-shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08);
+  --ds-shadow-dock: 0 6px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.07);
+  --ds-shadow-tooltip: 0 3px 12px rgba(0, 0, 0, 0.18);
+  --ds-scrollbar-thumb: rgba(0, 0, 0, 0.18);
+}

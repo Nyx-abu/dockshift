@@ -15,14 +15,24 @@ import path from 'path';
 // Characters that could be used for shell injection
 const SHELL_META_RE = /[;&|`$<>!{}()\[\]'"\\]/;
 
+// Path-specific danger set: every shell metacharacter EXCEPT backslash
+// (backslash is a legitimate Windows path separator). A real working
+// directory effectively never contains these — if one does, we refuse to
+// restore it rather than risk it reaching a shell.
+const CWD_DANGER_RE = /[;&|`$<>!{}()\[\]'"^%]/;
+
 /**
- * Validate that a path is a real, existing directory.
- * Returns the resolved path or null.
+ * Validate that a path is a real, existing directory AND contains no shell
+ * metacharacters. Returns the resolved path or null.
  */
 function validateCwd(cwd) {
   if (!cwd || typeof cwd !== 'string') return null;
   try {
     const resolved = path.resolve(cwd);
+    if (CWD_DANGER_RE.test(resolved)) {
+      console.warn('[TerminalManager] cwd rejected (shell metacharacters):', resolved);
+      return null;
+    }
     if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
       return resolved;
     }
@@ -72,21 +82,27 @@ export class TerminalManager {
 
     const isPwsh = shell.includes('powershell');
 
-    // Build argument arrays instead of interpolated command strings
+    // Build argument arrays instead of interpolated command strings. The
+    // working directory is applied via the spawn `cwd` option below — the new
+    // terminal window inherits it from the `cmd.exe` that runs `start`, so we
+    // never interpolate `cwd` into a shell command string.
     let args;
     if (isPwsh) {
-      // PowerShell: -NoExit -WorkingDirectory <cwd>
-      const pwshArgs = ['-NoExit', '-WorkingDirectory', cwd];
+      const pwshArgs = ['-NoExit'];
       if (startup) {
         pwshArgs.push('-Command', startup);
       }
       args = ['/c', 'start', '""', 'powershell.exe', ...pwshArgs];
     } else {
-      args = ['/c', 'start', '""', 'cmd.exe', '/k', `cd /d "${cwd}"`];
+      args = ['/c', 'start', '""', 'cmd.exe', '/k'];
     }
 
     try {
-      const child = spawn('cmd.exe', args, { detached: true, stdio: 'ignore' });
+      const child = spawn('cmd.exe', args, {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+      });
       child.unref();
     } catch (err) {
       console.warn('[TerminalManager] Failed to launch terminal', err);

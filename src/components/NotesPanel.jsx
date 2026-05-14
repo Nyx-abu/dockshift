@@ -94,10 +94,19 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
   const [loading, setLoading] = useState(false);
   const [showColors, setShowColors] = useState(false);
   const [formats, setFormats] = useState({});
+  // 'idle' | 'saving' | 'saved' — drives the subtle auto-save indicator
+  const [saveStatus, setSaveStatus] = useState('idle');
   const panelRef = useRef(null);
   const editorRef = useRef(null);
   const loadedNoteId = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
+
+  // Auto-save plumbing: a debounce timer, a mirror of `editNote` readable from
+  // stable callbacks, and a dirty flag so flush() knows whether to bother.
+  const autoSaveTimer = useRef(null);
+  const editNoteRef = useRef(null);
+  const dirtyRef = useRef(false);
+  useEffect(() => { editNoteRef.current = editNote; }, [editNote]);
 
 
 
@@ -179,8 +188,61 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
     );
   }, []);
 
+  // ── Auto-save ──
+  // Persists the in-progress note (debounced) so closing the panel or the app
+  // mid-edit doesn't lose work. Stays in the editor — unlike the explicit Save
+  // button, which also navigates back to the list.
+  const doAutoSave = useCallback(async () => {
+    const current = editNoteRef.current;
+    if (!current) return;
+    const body = editorRef.current?.innerHTML || '';
+    const hasBody = body.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+    if (!current.title?.trim() && !hasBody) return; // nothing worth saving yet
+
+    dirtyRef.current = false;
+    setSaveStatus('saving');
+    const note = { ...current, body, updatedAt: new Date().toISOString() };
+    const isNew = !note.id;
+    if (isNew) { note.id = crypto.randomUUID(); note.createdAt = note.updatedAt; }
+    try {
+      await api.invoke('notes:save', { note });
+      if (isNew) {
+        // Keep editing the same note: sync the id without letting the
+        // editor effect re-set innerHTML (which would reset the caret).
+        loadedNoteId.current = note.id;
+        setEditNote(p => (p ? { ...p, id: note.id, createdAt: note.createdAt } : p));
+      }
+      const list = await api.invoke('notes:list');
+      setNotes(Array.isArray(list) ? list : []);
+      setSaveStatus('saved');
+    } catch {
+      dirtyRef.current = true; // leave it dirty so a later flush retries
+      setSaveStatus('idle');
+    }
+  }, [api]);
+
+  const scheduleAutoSave = useCallback(() => {
+    dirtyRef.current = true;
+    setSaveStatus('idle');
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => { autoSaveTimer.current = null; doAutoSave(); }, 900);
+  }, [doAutoSave]);
+
+  const flushAutoSave = useCallback(() => {
+    if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
+    if (dirtyRef.current) doAutoSave();
+  }, [doAutoSave]);
+
+  // Flush a pending save when the panel is closed while editing — editNote
+  // state survives the close, so the in-progress note is preserved.
+  useEffect(() => {
+    if (!isOpen) flushAutoSave();
+  }, [isOpen, flushAutoSave]);
+
   // ── CRUD handlers ──
   const handleSave = useCallback(async () => {
+    if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
+    dirtyRef.current = false;
     if (!editNote?.title?.trim()) return;
     const body = editorRef.current?.innerHTML || '';
     const note = { ...editNote, body, updatedAt: new Date().toISOString() };
@@ -189,13 +251,18 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
     const list = await api.invoke('notes:list');
     setNotes(Array.isArray(list) ? list : []);
     setView('list'); setEditNote(null); loadedNoteId.current = null;
+    setSaveStatus('idle');
   }, [editNote, api]);
 
   const handleDelete = useCallback(async (id) => {
+    if (editNoteRef.current?.id === id || !id) {
+      if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
+      dirtyRef.current = false;
+    }
     await api.invoke('notes:delete', { id });
     const list = await api.invoke('notes:list');
     setNotes(Array.isArray(list) ? list : []);
-    if (editNote?.id === id) { setView('list'); setEditNote(null); loadedNoteId.current = null; }
+    if (editNote?.id === id) { setView('list'); setEditNote(null); loadedNoteId.current = null; setSaveStatus('idle'); }
   }, [editNote, api]);
 
   const handleTogglePin = useCallback(async (id) => {
@@ -235,7 +302,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
       {/* ── Header ── */}
       <div style={HEADER_STYLE}>
         {view === 'editor' && (
-          <button onClick={() => { setView('list'); setEditNote(null); setShowColors(false); loadedNoteId.current = null; }}
+          <button onClick={() => { flushAutoSave(); setView('list'); setEditNote(null); setShowColors(false); loadedNoteId.current = null; }}
             style={{ ...CLOSE_BTN, color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>←</button>
         )}
         <span style={TITLE_STYLE}>{view === 'editor' ? (editNote?.id ? 'Edit Note' : 'New Note') : '📝 Quick Notes'}</span>
@@ -276,7 +343,8 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
         /* ── Editor View ── */
         <>
           {/* Title */}
-          <input value={editNote?.title || ''} onChange={e => setEditNote(p => ({ ...p, title: e.target.value }))}
+          <input value={editNote?.title || ''}
+            onChange={e => { setEditNote(p => ({ ...p, title: e.target.value })); scheduleAutoSave(); }}
             placeholder="Note title..." style={{ ...INPUT_STYLE, fontSize: 14, fontWeight: 600, padding: '10px 12px' }} />
 
           {/* ── Formatting Toolbar ── */}
@@ -390,6 +458,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             contentEditable
             suppressContentEditableWarning
             onKeyDown={handleEditorKeyDown}
+            onInput={scheduleAutoSave}
             style={{
               flex: 1, overflowY: 'auto', minHeight: 0,
               background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)',
@@ -402,7 +471,13 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
           />
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+            <span style={{
+              fontSize: 10.5, color: 'rgba(255,255,255,0.3)', minWidth: 54,
+              transition: 'opacity 0.2s',
+            }}>
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : ''}
+            </span>
             <button onClick={handleSave} disabled={!editNote?.title?.trim()} style={{
               flex: 1, padding: '8px 0', borderRadius: 8,
               background: editNote?.title?.trim() ? 'rgba(110,125,255,0.15)' : 'rgba(255,255,255,0.04)',

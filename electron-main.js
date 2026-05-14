@@ -9,21 +9,51 @@ import { spawn } from 'child_process';
 import { SnapshotManager } from './src/workspace/SnapshotManager.js';
 import { WindowTracker } from './src/workspace/WindowTracker.js';
 import { TerminalManager } from './src/workspace/TerminalManager.js';
+import { readJson, writeJsonAtomic, setCorruptionNotifier } from './electron-persistence.js';
+// electron-updater is CommonJS — interop via the default import.
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Load .env ────────────────────────────────────────────────────────────────
+// Minimal .env parser (no dotenv dependency). Handles `KEY=value`, surrounding
+// single/double quotes, inline `#` comments on unquoted values, and trims
+// stray whitespace — the old regex kept quotes and trailing spaces verbatim,
+// which silently broke API auth.
+function parseEnvValue(raw) {
+  let value = raw.trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
+    (value.startsWith("'") && value.endsWith("'") && value.length >= 2)
+  ) {
+    // Quoted: strip the quotes, keep everything inside as-is.
+    return value.slice(1, -1);
+  }
+  // Unquoted: a `#` begins a comment.
+  const hashIndex = value.indexOf(' #');
+  if (hashIndex !== -1) value = value.slice(0, hashIndex);
+  return value.trim();
+}
+
 function loadEnv() {
   try {
     const envPath = path.join(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-      const lines = fs.readFileSync(envPath, 'utf8').split('\n');
-      for (const line of lines) {
-        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)\s*$/);
-        if (match && !process.env[match[1]]) process.env[match[1]] = match[2];
-      }
+    if (!fs.existsSync(envPath)) return;
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) continue;
+      if (process.env[key] !== undefined) continue; // real env wins
+      process.env[key] = parseEnvValue(trimmed.slice(eq + 1));
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn('[env] Failed to load .env:', err.message);
+  }
 }
 loadEnv();
 
@@ -62,6 +92,7 @@ class ClipboardHistoryManager {
     this.historyFile = path.join(userDataPath, 'clipboard-history.json');
     this.imagesDir = path.join(userDataPath, 'clipboard-images');
     this.history = [];
+    this.maxHistory = MAX_HISTORY; // overridable via the Settings panel
     this._lastHash = null;
     this._pollInterval = null;
     this._win = null;
@@ -69,25 +100,39 @@ class ClipboardHistoryManager {
     this._load();
   }
 
+  /**
+   * Update the history cap (from the `clipboardMaxItems` setting) and trim
+   * immediately if the new cap is smaller than the current history.
+   * @param {number} limit
+   */
+  setMaxHistory(limit) {
+    const n = Number(limit);
+    if (!Number.isFinite(n) || n < 1) return;
+    this.maxHistory = Math.floor(n);
+    if (this.history.length > this.maxHistory) {
+      const removed = this.history.splice(this.maxHistory);
+      for (const old of removed) {
+        if (old.type === 'image' && old.content && fs.existsSync(old.content)) {
+          fs.unlink(old.content, () => {});
+        }
+      }
+      this._save();
+    }
+  }
+
   _ensureDirs() {
     fs.mkdirSync(this.imagesDir, { recursive: true });
   }
 
   _load() {
-    try {
-      if (fs.existsSync(this.historyFile)) {
-        const raw = fs.readFileSync(this.historyFile, 'utf8');
-        this.history = JSON.parse(raw);
-      }
-    } catch (e) {
-      console.warn('[ClipboardHistory] Load error:', e.message);
-      this.history = [];
-    }
+    // readJson preserves a corrupted history file as a `.corrupt-<ts>` backup
+    // and notifies, instead of silently starting from an empty list.
+    this.history = readJson(this.historyFile, []);
   }
 
   _save() {
     try {
-      fs.writeFileSync(this.historyFile, JSON.stringify(this.history, null, 2), 'utf8');
+      writeJsonAtomic(this.historyFile, this.history);
     } catch (e) {
       console.warn('[ClipboardHistory] Save error:', e.message);
     }
@@ -193,8 +238,8 @@ class ClipboardHistoryManager {
       this.history.unshift(recent);
     } else {
       this.history.unshift(item);
-      if (this.history.length > MAX_HISTORY) {
-        const removed = this.history.splice(MAX_HISTORY);
+      if (this.history.length > this.maxHistory) {
+        const removed = this.history.splice(this.maxHistory);
         // Clean up orphaned image files
         for (const old of removed) {
           if (old.type === 'image' && old.content && fs.existsSync(old.content)) {
@@ -339,6 +384,19 @@ let mainWindow;
 let isVisible = true;
 let isDockExpanded = false;
 
+// When a stored JSON file is found corrupted, tell the user instead of
+// silently dropping their data — the original file is preserved as a
+// `.corrupt-<ts>` backup by the persistence layer.
+setCorruptionNotifier((filePath, backupPath) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('show-notification', {
+    title: 'Recovered from a corrupted file',
+    body: backupPath
+      ? `${path.basename(filePath)} was unreadable. A backup was saved so nothing is lost.`
+      : `${path.basename(filePath)} was unreadable and has been reset.`,
+  });
+});
+
 /** @type {SnapshotManager | null} */
 let snapshotManager = null;
 const windowTracker = new WindowTracker();
@@ -392,6 +450,9 @@ function createWindow() {
   // Start clipboard history monitoring
   getClipboardHistory().start(mainWindow);
 
+  // Apply saved preferences so they actually take effect on launch.
+  applySettings(readSettings());
+
   if (isDevelopment) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
@@ -441,14 +502,17 @@ ipcMain.handle('clipboard:copyItem', (_event, { id }) => {
 
 // Workspace Snapshot IPC
 ipcMain.handle('workspace:save', async (_event, { name }) => {
-  console.log('[IPC] workspace:save', name);
+  // Sanitize up front so the stored `name` field matches the on-disk filename
+  // and never carries path-traversal payloads.
+  const safeName = SnapshotManager.sanitizeName(name);
+  console.log('[IPC] workspace:save', safeName);
 
   const apps = await windowTracker.captureAppSnapshotsAsync();
   const terminals = getCurrentTerminalSnapshots();
   const dockLayout = getCurrentDockLayoutSnapshot();
 
   const snapshot = {
-    name,
+    name: safeName,
     createdAt: new Date().toISOString(),
     apps,
     terminals,
@@ -456,7 +520,7 @@ ipcMain.handle('workspace:save', async (_event, { name }) => {
   };
 
   const manager = getSnapshotManager();
-  await manager.saveSnapshot(name, snapshot);
+  await manager.saveSnapshot(safeName, snapshot);
   return snapshot;
 });
 
@@ -570,10 +634,10 @@ ipcMain.handle('clipboard:copy', async (event, text) => {
 // ─── Notes IPC ────────────────────────────────────────────────────────────────
 const notesFile = () => path.join(app.getPath('userData'), 'notes.json');
 function readNotes() {
-  try { return JSON.parse(fs.readFileSync(notesFile(), 'utf8')); } catch { return []; }
+  return readJson(notesFile(), []);
 }
 function writeNotes(notes) {
-  fs.writeFileSync(notesFile(), JSON.stringify(notes, null, 2), 'utf8');
+  writeJsonAtomic(notesFile(), notes);
 }
 
 ipcMain.handle('notes:list', () => readNotes());
@@ -605,6 +669,13 @@ async function getGenAI() {
   genaiInstance = new GoogleGenAI({ apiKey });
   return genaiInstance;
 }
+
+// Lightweight check the renderer uses to gate the AI panel before a user
+// can type a prompt that would only fail.
+ipcMain.handle('ai:status', () => {
+  const apiKey = process.env.VITE_GEMINI_API_KEY;
+  return { hasKey: !!apiKey && apiKey !== 'your_api_key_here' };
+});
 
 ipcMain.handle('ai:chat', async (_e, { prompt }) => {
   const ai = await getGenAI();
@@ -644,10 +715,10 @@ const screenshotsIndex = () => path.join(app.getPath('userData'), 'screenshots-i
 
 function ensureScreenshotsDir() { fs.mkdirSync(screenshotsDir(), { recursive: true }); }
 function readScreenshotIndex() {
-  try { return JSON.parse(fs.readFileSync(screenshotsIndex(), 'utf8')); } catch { return []; }
+  return readJson(screenshotsIndex(), []);
 }
 function writeScreenshotIndex(idx) {
-  fs.writeFileSync(screenshotsIndex(), JSON.stringify(idx, null, 2), 'utf8');
+  writeJsonAtomic(screenshotsIndex(), idx);
 }
 
 ipcMain.handle('screenshot:getSources', async () => {
@@ -742,19 +813,52 @@ ipcMain.handle('screenshot:open', (_e, { id }) => {
 // ─── Settings IPC ─────────────────────────────────────────────────────────────
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 function readSettings() {
-  try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch { return {}; }
+  return readJson(settingsFile(), {});
 }
 
-ipcMain.handle('settings:get', () => readSettings());
-ipcMain.handle('settings:set', (_e, { settings }) => {
-  fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), 'utf8');
-  // Apply relevant settings
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (typeof settings.alwaysOnTop === 'boolean') mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
+/** Move the dock window to one of the four preset positions. */
+function applyDockPosition(position) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+  const { width: w, height: h } = mainWindow.getBounds();
+  const margin = 20;
+  const centerX = Math.round((sw - w) / 2);
+  const positions = {
+    'bottom-center': { x: centerX, y: sh - h - margin },
+    'bottom-right': { x: sw - w - margin, y: sh - h - margin },
+    'bottom-left': { x: margin, y: sh - h - margin },
+    'top-center': { x: centerX, y: margin },
+  };
+  const pos = positions[position];
+  if (pos) mainWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h });
+}
+
+/**
+ * Apply every setting that has a runtime effect. Called both from the
+ * Settings panel (settings:set) and once at startup so saved preferences
+ * actually take effect — previously dockPosition and clipboardMaxItems were
+ * persisted but silently ignored.
+ */
+function applySettings(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  if (mainWindow && !mainWindow.isDestroyed() && typeof settings.alwaysOnTop === 'boolean') {
+    mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
   }
   if (typeof settings.launchOnStartup === 'boolean') {
     app.setLoginItemSettings({ openAtLogin: settings.launchOnStartup });
   }
+  if (settings.clipboardMaxItems != null) {
+    getClipboardHistory().setMaxHistory(settings.clipboardMaxItems);
+  }
+  if (settings.dockPosition) {
+    applyDockPosition(settings.dockPosition);
+  }
+}
+
+ipcMain.handle('settings:get', () => readSettings());
+ipcMain.handle('settings:set', (_e, { settings }) => {
+  writeJsonAtomic(settingsFile(), settings);
+  applySettings(settings);
   return { ok: true };
 });
 
@@ -858,11 +962,14 @@ ipcMain.handle('terminal:spawn', (e) => {
   }
   const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
   const shellArgs = os.platform() === 'win32' ? ['-NoLogo'] : [];
-  // Filter out sensitive environment variables before passing to PTY
+  // Filter sensitive environment variables before passing to the PTY.
+  // This is a *denylist of patterns* rather than a list of known key names —
+  // any var whose name looks secret-ish (e.g. a user's own GOOGLE_API_KEY)
+  // is stripped, not just the handful we happen to ship with.
   const safeEnv = { ...process.env };
-  const sensitiveKeys = ['VITE_GEMINI_API_KEY', 'GEMINI_API_KEY', 'API_KEY', 'SECRET', 'TOKEN', 'PASSWORD'];
+  const SECRET_NAME_RE = /(KEY|SECRET|TOKEN|PASS(WORD|WD)?|CREDENTIAL|PRIVATE|AUTH|SESSION|COOKIE|SIGNATURE|CERT)/i;
   for (const key of Object.keys(safeEnv)) {
-    if (sensitiveKeys.some(sk => key.toUpperCase().includes(sk))) {
+    if (SECRET_NAME_RE.test(key)) {
       delete safeEnv[key];
     }
   }
@@ -901,27 +1008,21 @@ ipcMain.handle('terminal:resize', (_e, { cols, rows }) => {
 const bookmarksFile = () => path.join(app.getPath('userData'), 'browser-bookmarks.json');
 const browserHistFile = () => path.join(app.getPath('userData'), 'browser-history.json');
 
-ipcMain.handle('browser:getBookmarks', () => {
-  try { return JSON.parse(fs.readFileSync(bookmarksFile(), 'utf8')); } catch { return []; }
-});
+ipcMain.handle('browser:getBookmarks', () => readJson(bookmarksFile(), []));
 ipcMain.handle('browser:saveBookmark', (_e, { url, title }) => {
-  let bm;
-  try { bm = JSON.parse(fs.readFileSync(bookmarksFile(), 'utf8')); } catch { bm = []; }
+  const bm = readJson(bookmarksFile(), []);
   if (!bm.find(b => b.url === url)) { bm.unshift({ url, title, addedAt: new Date().toISOString() }); }
   if (bm.length > 50) bm.splice(50);
-  fs.writeFileSync(bookmarksFile(), JSON.stringify(bm, null, 2), 'utf8');
+  writeJsonAtomic(bookmarksFile(), bm);
   return { ok: true };
 });
-ipcMain.handle('browser:getHistory', () => {
-  try { return JSON.parse(fs.readFileSync(browserHistFile(), 'utf8')); } catch { return []; }
-});
+ipcMain.handle('browser:getHistory', () => readJson(browserHistFile(), []));
 ipcMain.handle('browser:addHistory', (_e, { url, title }) => {
-  let hist;
-  try { hist = JSON.parse(fs.readFileSync(browserHistFile(), 'utf8')); } catch { hist = []; }
+  let hist = readJson(browserHistFile(), []);
   hist = hist.filter(h => h.url !== url);
   hist.unshift({ url, title, visitedAt: new Date().toISOString() });
   if (hist.length > 100) hist.splice(100);
-  fs.writeFileSync(browserHistFile(), JSON.stringify(hist, null, 2), 'utf8');
+  writeJsonAtomic(browserHistFile(), hist);
   return { ok: true };
 });
 
@@ -942,6 +1043,14 @@ app.on('ready', () => {
   globalShortcut.register('Control+Shift+D', () => {
     toggleWindowVisibility();
   });
+
+  // Check for updates from GitHub Releases (packaged builds only — in dev
+  // there's no published artifact and electron-updater would just error).
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.warn('[updater] Update check failed:', err.message);
+    });
+  }
 });
 
 app.on('window-all-closed', () => {

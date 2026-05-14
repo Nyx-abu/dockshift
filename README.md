@@ -16,8 +16,12 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
-**10 powerful tools in one elegant, always-on-top dock.**<br/>
-AI assistant · Clipboard history · Terminal · Browser · Screenshots · Voice-to-text · Notes · Launcher · Workspaces · Settings
+**A floating dock for Windows, built around three things it does well:**<br/>
+persistent clipboard history · one-click workspace snapshots · a floating AI assistant with clipboard context<br/>
+<sub>…plus screenshots, voice-to-text, notes, a launcher, and lightweight terminal & browser panels.</sub>
+
+> **Windows only.** DockShift relies on Win32 / PowerShell window tracking and Windows
+> clipboard internals — macOS and Linux are not supported.
 
 [Getting Started](#-getting-started) · [Features](#-features) · [Architecture](#-architecture) · [Contributing](#-contributing)
 
@@ -36,9 +40,23 @@ AI assistant · Clipboard history · Terminal · Browser · Screenshots · Voice
 
 ## ✨ What is DockShift?
 
-DockShift is a **macOS-inspired floating dock** for Windows that puts 10 essential productivity tools at your fingertips. It hovers above all windows as a sleek, dark bar — click any icon to launch a draggable, resizable panel.
+DockShift is a **macOS-inspired floating dock** for Windows. It hovers above all windows as a
+sleek, dark bar — click any icon to launch a draggable, resizable panel.
 
-Built with **Electron + React + Vite**, it features a premium dark UI with smooth animations, and runs as a lightweight overlay that stays out of your way until you need it.
+The dock bundles a handful of tools, but it's strongest at three of them:
+
+- **📋 Clipboard history** — persistent, type-aware, with image previews. The standout feature.
+- **📁 Workspace snapshots** — save and restore your open apps and window layout in one click.
+  There's no built-in Windows equivalent.
+- **✨ Floating AI assistant** — Gemini chat that can act on whatever's in your clipboard,
+  without leaving your current app.
+
+The remaining panels (screenshots, voice-to-text, notes, launcher) are solid for quick tasks.
+The **terminal and browser panels are intentionally lightweight** — handy for a quick command
+or doc lookup, not a replacement for Windows Terminal or a real browser.
+
+Built with **Electron + React + Vite**, it features a dark UI with smooth animations and runs
+as a lightweight overlay that stays out of your way until you need it.
 
 <br/>
 
@@ -62,14 +80,14 @@ System-wide clipboard manager tracking **text, images, files, links, and hex col
 <tr>
 <td>
 
-### 🖥️ Terminal
-A fully integrated **xterm.js** terminal powered by **node-pty**. Run PowerShell or CMD right from the dock — no need to switch windows.
+### 🖥️ Terminal *(lightweight)*
+An **xterm.js** terminal powered by **node-pty** for quick one-off commands. Single session, no tabs or splits — for serious terminal work, use Windows Terminal.
 
 </td>
 <td>
 
-### 🌐 Browser
-A built-in browser with URL bar, bookmarks, history, and navigation controls. Browse the web without leaving your workflow. Sandboxed for security.
+### 🌐 Browser *(lightweight)*
+A sandboxed `webview` with a URL bar, bookmarks, and history — handy for a quick docs lookup. No extensions or autofill; it's not a daily-driver browser.
 
 </td>
 </tr>
@@ -140,7 +158,7 @@ Configure dock position, always-on-top behavior, launch-on-startup, clipboard li
 
 ```bash
 # Clone the repository
-git clone https://github.com/Nyx-abu/dockshift.git
+git clone https://github.com/Salah-XD/dockshift.git
 cd dockshift
 
 # Install dependencies
@@ -162,11 +180,15 @@ npm run dev:vite     # Start Vite (React HMR)
 npm run dev:electron # Start Electron
 ```
 
-### Building for Production
+### Building a Windows installer
 
 ```bash
-npm run build
+npm run dist       # builds the renderer + a Windows NSIS installer & portable build → release/
+npm run dist:dir   # unpacked build (faster, for local testing)
 ```
+
+> Packaging requires an app icon at `assets/icon.ico`. Releases are also built automatically
+> by the GitHub Actions workflow when a `v*` tag is pushed.
 
 ### Keyboard Shortcut
 

@@ -10,6 +10,7 @@ import SettingsPanel from './SettingsPanel';
 import LauncherPanel from './LauncherPanel';
 import TerminalPanel from './TerminalPanel';
 import BrowserPanel from './BrowserPanel';
+import ErrorBoundary from './ErrorBoundary';
 import '../styles/DockMenu.css';
 
 const DOCK_ITEMS = [
@@ -182,17 +183,37 @@ export default function DockMenu({ onAction, activePanel }) {
         </div>
       </div>
 
-      {/* Panels */}
-      <WorkspacePanel isOpen={openPanel === 'folder'} anchorRect={anchorRect} onClose={closePanel} />
-      <ClipboardPanel isOpen={openPanel === 'clipboard'} anchorRect={anchorRect} onClose={closePanel} />
-      <VoicePanel isOpen={openPanel === 'mic'} anchorRect={anchorRect} onClose={closePanel} />
-      <NotesPanel isOpen={openPanel === 'notes'} anchorRect={anchorRect} onClose={closePanel} />
-      <AiPanel isOpen={openPanel === 'sparkle'} anchorRect={anchorRect} onClose={closePanel} />
-      <ScreenshotPanel isOpen={openPanel === 'camera'} anchorRect={anchorRect} onClose={closePanel} />
-      <SettingsPanel isOpen={openPanel === 'settings'} anchorRect={anchorRect} onClose={closePanel} />
-      <LauncherPanel isOpen={openPanel === 'lightning'} anchorRect={anchorRect} onClose={closePanel} />
-      <TerminalPanel isOpen={openPanel === 'terminal'} anchorRect={anchorRect} onClose={closePanel} />
-      <BrowserPanel isOpen={openPanel === 'browser'} anchorRect={anchorRect} onClose={closePanel} />
+      {/* Panels — each wrapped so a crash in one can't take down the dock */}
+      <ErrorBoundary label="Workspaces" onClose={closePanel}>
+        <WorkspacePanel isOpen={openPanel === 'folder'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Clipboard" onClose={closePanel}>
+        <ClipboardPanel isOpen={openPanel === 'clipboard'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Voice" onClose={closePanel}>
+        <VoicePanel isOpen={openPanel === 'mic'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Notes" onClose={closePanel}>
+        <NotesPanel isOpen={openPanel === 'notes'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="AI Assistant" onClose={closePanel}>
+        <AiPanel isOpen={openPanel === 'sparkle'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Screenshots" onClose={closePanel}>
+        <ScreenshotPanel isOpen={openPanel === 'camera'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Settings" onClose={closePanel}>
+        <SettingsPanel isOpen={openPanel === 'settings'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Launcher" onClose={closePanel}>
+        <LauncherPanel isOpen={openPanel === 'lightning'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Terminal" onClose={closePanel}>
+        <TerminalPanel isOpen={openPanel === 'terminal'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Browser" onClose={closePanel}>
+        <BrowserPanel isOpen={openPanel === 'browser'} anchorRect={anchorRect} onClose={closePanel} />
+      </ErrorBoundary>
     </>
   );
 }

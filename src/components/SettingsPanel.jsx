@@ -77,8 +77,6 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
     alwaysOnTop: true,
     launchOnStartup: false,
     clipboardMaxItems: 200,
-    clipboardPollingMs: 500,
-    theme: 'dark',
   });
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);

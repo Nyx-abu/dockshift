@@ -342,13 +342,25 @@ $SWP_NOACTIVATE = 0x0010
    */
   execPowerShell(script) {
     return new Promise((resolve, reject) => {
+      // `timeout` makes execFile kill the child and call back with an error if
+      // PowerShell hangs (e.g. enumerating a huge number of windows), so a
+      // workspace save/restore can never block the UI indefinitely.
       execFile(
         'powershell.exe',
         ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-        { windowsHide: true, maxBuffer: 10 * 1024 * 1024 },
+        {
+          windowsHide: true,
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 20000,
+          killSignal: 'SIGKILL',
+        },
         (err, stdout, stderr) => {
           if (err) {
-            console.warn('[WindowTracker] PowerShell error', err, stderr);
+            if (err.killed || err.signal) {
+              console.warn('[WindowTracker] PowerShell timed out and was terminated');
+            } else {
+              console.warn('[WindowTracker] PowerShell error', err, stderr);
+            }
             reject(err);
             return;
           }

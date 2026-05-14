@@ -29,12 +29,25 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  // 'checking' until ai:status resolves, then 'ok' or 'missing'
+  const [keyStatus, setKeyStatus] = useState('checking');
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
 
-
+  // Check whether a Gemini API key is configured whenever the panel opens, so
+  // we can gate the input instead of letting the user type a prompt that can
+  // only fail.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setKeyStatus('checking');
+    api.invoke('ai:status')
+      .then(res => { if (!cancelled) setKeyStatus(res?.hasKey ? 'ok' : 'missing'); })
+      .catch(() => { if (!cancelled) setKeyStatus('missing'); });
+    return () => { cancelled = true; };
+  }, [isOpen, api]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -43,8 +56,10 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
 
   // Focus input on open
   useEffect(() => {
-    if (isOpen && inputRef.current) setTimeout(() => inputRef.current?.focus(), 100);
-  }, [isOpen]);
+    if (isOpen && keyStatus === 'ok' && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen, keyStatus]);
 
   const sendMessage = useCallback(async (text) => {
     const msg = text || input.trim();
@@ -56,10 +71,22 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
       const res = await api.invoke('ai:chat', { prompt: msg });
       setMessages(prev => [...prev, { role: 'ai', text: res?.text || 'No response received.' }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: `Error: ${err.message || 'Failed to get response'}`, error: true }]);
+      // Keep the prompt on the error message so the user can retry it.
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: `Error: ${err.message || 'Failed to get response'}`,
+        error: true,
+        retryPrompt: msg,
+      }]);
     }
     setLoading(false);
   }, [input, loading, api]);
+
+  // Retry a failed prompt: drop the error bubble, then resend.
+  const retryMessage = useCallback((index, prompt) => {
+    setMessages(prev => prev.filter((_, i) => i !== index));
+    sendMessage(prompt);
+  }, [sendMessage]);
 
   const handleQuickAction = useCallback(async (action) => {
     let clipContent = '';
@@ -112,8 +139,8 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
           onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}>✕</button>
       </div>
 
-      {/* Quick Actions (shown when no messages) */}
-      {messages.length === 0 && (
+      {/* Quick Actions (shown when no messages and the AI is usable) */}
+      {messages.length === 0 && keyStatus === 'ok' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexShrink: 0 }}>
           {QUICK_ACTIONS.map(a => (
             <button key={a.label} onClick={() => handleQuickAction(a)} style={{
@@ -135,11 +162,33 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
         flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10,
         scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent',
       }}>
-        {messages.length === 0 && !loading && (
+        {messages.length === 0 && !loading && keyStatus === 'ok' && (
           <div style={{ textAlign: 'center', padding: 40, animation: 'fadeInUp 0.4s ease' }}>
             <div style={{ fontSize: 36, marginBottom: 12, filter: 'drop-shadow(0 0 12px rgba(110,125,255,0.3))' }}>✨</div>
             <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, lineHeight: 1.6 }}>
               Ask me anything or use a quick action above.
+            </p>
+          </div>
+        )}
+        {messages.length === 0 && keyStatus === 'checking' && (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>Checking AI configuration…</p>
+          </div>
+        )}
+        {keyStatus === 'missing' && (
+          <div style={{
+            margin: 'auto', maxWidth: 300, textAlign: 'center', padding: '24px 20px',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 14, animation: 'fadeInUp 0.4s ease',
+          }}>
+            <div style={{ fontSize: 30, marginBottom: 10 }}>🔑</div>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+              No Gemini API key configured
+            </p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11.5, lineHeight: 1.6 }}>
+              Create a <code style={{ color: '#9aa5ff' }}>.env</code> file in the DockShift folder
+              with <code style={{ color: '#9aa5ff' }}>VITE_GEMINI_API_KEY=your_key</code>, then
+              restart the app. Get a free key from Google AI Studio.
             </p>
           </div>
         )}
@@ -155,7 +204,23 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             animation: 'fadeInUp 0.25s ease',
             boxShadow: msg.role === 'user' ? '0 4px 16px rgba(110,125,255,0.08)' : 'none',
-          }}>{msg.text}</div>
+          }}>
+            {msg.text}
+            {msg.error && msg.retryPrompt && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={() => retryMessage(i, msg.retryPrompt)}
+                  disabled={loading}
+                  style={{
+                    background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.25)',
+                    borderRadius: 7, color: '#ff8787', fontSize: 11, fontWeight: 500,
+                    padding: '4px 10px', cursor: loading ? 'default' : 'pointer',
+                    WebkitAppRegion: 'no-drag', fontFamily: 'inherit',
+                  }}
+                >↻ Retry</button>
+              </div>
+            )}
+          </div>
         ))}
         {loading && (
           <div style={{
@@ -169,7 +234,8 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
       <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'flex-end' }}>
         <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything…" disabled={loading}
+          placeholder={keyStatus === 'ok' ? 'Ask anything…' : 'AI unavailable — no API key configured'}
+          disabled={loading || keyStatus !== 'ok'}
           rows={Math.min(4, Math.max(1, input.split('\n').length))}
           style={{
             flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
@@ -177,21 +243,25 @@ export default function AiPanel({ isOpen, onClose, anchorRect }) {
             WebkitAppRegion: 'no-drag', fontFamily: 'inherit', resize: 'none',
             transition: 'border-color 0.2s', lineHeight: 1.5,
             maxHeight: 100, minHeight: 38,
+            opacity: keyStatus === 'ok' ? 1 : 0.5,
           }}
           onFocus={e => { e.currentTarget.style.borderColor = 'rgba(110,125,255,0.3)'; }}
           onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; }}
         />
-        <button onClick={() => sendMessage()} disabled={loading || !input.trim()} style={{
-          padding: '10px 16px', borderRadius: 10,
-          background: input.trim() && !loading
-            ? 'rgba(110,125,255,0.2)'
-            : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${input.trim() && !loading ? 'rgba(110,125,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
-          color: input.trim() && !loading ? '#9aa5ff' : 'rgba(255,255,255,0.15)',
-          fontSize: 14, cursor: input.trim() && !loading ? 'pointer' : 'default',
-          WebkitAppRegion: 'no-drag', transition: 'all 0.15s',
-          height: 38,
-        }}>↑</button>
+        {(() => {
+          const canSend = !!input.trim() && !loading && keyStatus === 'ok';
+          return (
+            <button onClick={() => sendMessage()} disabled={!canSend} style={{
+              padding: '10px 16px', borderRadius: 10,
+              background: canSend ? 'rgba(110,125,255,0.2)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${canSend ? 'rgba(110,125,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
+              color: canSend ? '#9aa5ff' : 'rgba(255,255,255,0.15)',
+              fontSize: 14, cursor: canSend ? 'pointer' : 'default',
+              WebkitAppRegion: 'no-drag', transition: 'all 0.15s',
+              height: 38,
+            }}>↑</button>
+          );
+        })()}
       </div>
     </ResizablePanel>
   );
