@@ -17,10 +17,10 @@ more — always within reach, never in your way.
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&labelColor=1A1B26&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&labelColor=1A1B26&logo=windows11&logoColor=4CC2FF)](https://www.microsoft.com/windows)
 
-[![Stars](https://img.shields.io/github/stars/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=F5A623)](https://github.com/Salah-XD/dockshift/stargazers)
-[![License](https://img.shields.io/github/license/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=22C55E)](LICENSE)
-[![Last commit](https://img.shields.io/github/last-commit/Salah-XD/dockshift?style=flat-square&labelColor=1A1B26&color=7AA2F7)](https://github.com/Salah-XD/dockshift/commits)
+[![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square&labelColor=1A1B26)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-7AA2F7?style=flat-square&labelColor=1A1B26)](https://github.com/Salah-XD/dockshift/releases)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-BB9AF7?style=flat-square&labelColor=1A1B26)](#-contributing)
+[![Star on GitHub](https://img.shields.io/badge/Star_on_GitHub-F5A623?style=flat-square&labelColor=1A1B26&logo=github&logoColor=white)](https://github.com/Salah-XD/dockshift)
 
 [**Quick Start**](#-quick-start) · [**Features**](#-what-it-does) · [**Security**](#-built-secure) · [**Contributing**](#-contributing)
 
