@@ -8,6 +8,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ## [0.9.0-rc.2] - 2026-05-15
+
+Release candidate for [0.9.0]. Same changes as below, plus:
+
+### Changed
+- Installer is now **one-click** (no wizard) — runs after install, like Slack/Discord/VS Code.
+- GitHub Actions release workflow auto-detects pre-release tags (`-rc.N` suffix) and skips
+  the draft step, so releases publish immediately as Latest or Pre-release.
+
+### Added
+- `npm run release <ver>` helper — bumps `package.json`, README badge, and CHANGELOG date
+  in sync, then prints the git commands to commit/tag/push.
+- NSIS installer/uninstaller icons now use the DockShift app icon.
+
 ## [0.9.0] - 2026-05-15
 
 First public beta. The app is feature-complete for everyday use; we're shipping at 0.9

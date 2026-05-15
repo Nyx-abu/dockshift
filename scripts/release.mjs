@@ -100,18 +100,26 @@ if (versionAlreadyInChangelog) {
 }
 
 const tag = `v${version}`;
-console.log(`✓ package.json    → ${version}`);
-console.log(`✓ README badge    → Version-${badgeLabel}`);
-console.log(`✓ CHANGELOG       → ${changelogStatus}${isPrerelease ? ' (will publish as Pre-release)' : ''}`);
 console.log('');
-console.log('Next steps (review the diff, then push):');
+console.log(`  ✓ package.json    →  ${version}`);
+console.log(`  ✓ README badge    →  Version-${badgeLabel}`);
+console.log(`  ✓ CHANGELOG       →  ${changelogStatus}${isPrerelease ? '  (publishes as Pre-release)' : ''}`);
 console.log('');
-console.log(`    git add -A`);
-console.log(`    git diff --cached`);
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('  FILES EDITED — NOT YET COMMITTED. Run these to actually ship:');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('');
+console.log('    git add -A');
+console.log('    git diff --cached            # eyeball the diff');
 console.log(`    git commit -m "Release ${tag}"`);
-console.log(`    git tag ${tag}`);
-console.log(`    git push && git push origin ${tag}`);
+console.log(`    git push                     # pushes the bump commit`);
 console.log('');
-console.log('GitHub Actions will build the Windows installer + portable .exe and publish');
-console.log('them at https://github.com/Salah-XD/dockshift/releases/tag/' + tag);
-console.log('Watch the run at https://github.com/Salah-XD/dockshift/actions');
+console.log('  ⚠  Without the next two commands, GitHub Actions will NOT trigger:');
+console.log('');
+console.log(`    git tag ${tag}`);
+console.log(`    git push origin ${tag}       # ← THIS is what fires the release workflow`);
+console.log('');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('');
+console.log(`  Watch:    https://github.com/Salah-XD/dockshift/actions`);
+console.log(`  Release:  https://github.com/Salah-XD/dockshift/releases/tag/${tag}`);
