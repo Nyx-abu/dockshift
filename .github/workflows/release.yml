@@ -49,3 +49,13 @@ jobs:
         run: npx electron-builder --win --publish always --config.publish.releaseType=${{ steps.rel.outputs.type }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # electron-builder uploads the installer but leaves the release body
+      # empty. Ask GitHub to auto-generate notes from commits/PRs between the
+      # previous tag and this one. Runs after the artifact upload so the
+      # release definitely exists.
+      - name: Generate release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --generate-notes

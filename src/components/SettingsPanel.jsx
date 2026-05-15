@@ -44,6 +44,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
     launchOnStartup: false,
     clipboardMaxItems: 200,
     toggleDockShortcut: DEFAULT_TOGGLE_SHORTCUT,
+    analyticsEnabled: false,
   });
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
@@ -114,6 +115,23 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
               <Switch
                 checked={!!settings.launchOnStartup}
                 onChange={(v) => update('launchOnStartup', v)}
+              />
+            }
+          />
+          <SettingRow
+            label="Help improve DockShift"
+            description="Send anonymous usage stats once a day (version, OS, country). No personal data, no telemetry inside the app. Off by default."
+            control={
+              <Switch
+                checked={!!settings.analyticsEnabled}
+                onChange={async (v) => {
+                  // Optimistic update; rollback if the IPC says no.
+                  setSettings((prev) => ({ ...prev, analyticsEnabled: v }));
+                  const r = await api?.invoke?.('analytics:setEnabled', { enabled: v });
+                  if (!r?.ok) {
+                    setSettings((prev) => ({ ...prev, analyticsEnabled: !v }));
+                  }
+                }}
               />
             }
           />

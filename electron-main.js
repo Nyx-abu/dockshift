@@ -1479,6 +1479,101 @@ function createTray() {
   refreshTrayMenu();
 }
 
+// ─── Anonymous heartbeat (opt-in usage analytics) ────────────────────────────
+// Default OFF. When enabled in Settings → System, the app sends a single
+// JSON ping to the landing site's /api/heartbeat once per launch + once per
+// 24h while running. Ping payload is anonymous (stable UUID + version + OS
+// string + locale); the server adds country/region from Vercel's edge geo
+// headers. No personally identifying information ever leaves the machine.
+const HEARTBEAT_ENDPOINT = 'https://dock-flow.vercel.app/api/heartbeat';
+const HEARTBEAT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let heartbeatTimer = null;
+let lastHeartbeatAt = 0;
+
+function installIdFile() {
+  return path.join(app.getPath('userData'), 'install-id.json');
+}
+
+function getOrCreateInstallId() {
+  const file = installIdFile();
+  try {
+    const data = readJson(file, null);
+    if (data && typeof data.id === 'string' && data.id.length >= 32) return data.id;
+  } catch (_) {}
+  const id = crypto.randomUUID();
+  try {
+    writeJsonAtomic(file, { id, createdAt: new Date().toISOString() });
+  } catch (err) {
+    console.warn('[heartbeat] could not persist install id:', err.message);
+  }
+  return id;
+}
+
+async function sendHeartbeat({ force = false } = {}) {
+  const settings = readSettings();
+  if (!settings.analyticsEnabled) return;
+  if (!force && Date.now() - lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) return;
+
+  const payload = {
+    id: getOrCreateInstallId(),
+    version: app.getVersion(),
+    os: process.platform,
+    osRelease: os.release(),
+    arch: process.arch,
+    locale: app.getLocale() || 'unknown',
+  };
+
+  try {
+    // AbortController so a network blackhole doesn't hang the timer.
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(HEARTBEAT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (res.ok) {
+      lastHeartbeatAt = Date.now();
+    } else {
+      console.warn('[heartbeat] non-2xx response:', res.status);
+    }
+  } catch (err) {
+    // Silent — we don't want a flaky network to surface as a user error.
+    console.warn('[heartbeat] failed:', err.message || err);
+  }
+}
+
+function startHeartbeatLoop() {
+  // Fire immediately, then on a 24h interval. Both gated by analyticsEnabled
+  // inside sendHeartbeat — toggling off in Settings stops sending without
+  // needing to clear the timer.
+  sendHeartbeat();
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+}
+
+ipcMain.handle('analytics:setEnabled', (_e, { enabled } = {}) => {
+  const next = !!enabled;
+  writeJsonAtomic(settingsFile(), { ...readSettings(), analyticsEnabled: next });
+  if (next) {
+    // Force-send right away so the user sees their install reflected on the
+    // dashboard within seconds of opting in.
+    lastHeartbeatAt = 0;
+    sendHeartbeat({ force: true });
+  }
+  return { ok: true, enabled: next };
+});
+
+ipcMain.handle('analytics:getStatus', () => {
+  return {
+    enabled: !!readSettings().analyticsEnabled,
+    installId: getOrCreateInstallId(),
+    lastSentAt: lastHeartbeatAt ? new Date(lastHeartbeatAt).toISOString() : null,
+  };
+});
+
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 // electron-updater pulls release manifests from GitHub Releases (configured in
 // package.json `build.publish`). We expose a small state machine to the
@@ -1624,6 +1719,7 @@ app.on('ready', () => {
   }
 
   setupAutoUpdater();
+  startHeartbeatLoop();
 });
 
 app.on('window-all-closed', () => {
@@ -1648,5 +1744,9 @@ app.on('will-quit', () => {
   if (updateCheckTimer) {
     clearInterval(updateCheckTimer);
     updateCheckTimer = null;
+  }
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
 });
