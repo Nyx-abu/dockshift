@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────
+#  IMPORTANT: this workflow belongs in the APP repo (Salah-XD/dockshift),
+#  not this web repo. Releases are cut from the app repo, so the
+#  `release` trigger only fires there.
+#
+#  To activate:
+#    1. Copy this file to  Salah-XD/dockshift/.github/workflows/
+#    2. Make sure that repo has a secret named  VERCEL_DEPLOY_HOOK
+#       (Settings → Secrets and variables → Actions)
+#    3. Commit & push → done. Next release will trigger a Vercel rebuild
+#       within ~5 seconds.
+#
+#  Kept here as the source of truth so the deploy contract is visible
+#  from the web repo too.
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Redeploy web on release
+
+on:
+  release:
+    # `published` covers the normal flow (Draft → Publish, or "Publish
+    # release" directly). `released` fires only when a release moves out
+    # of pre-release state — covers the "publish a pre-release as stable"
+    # path. Together they catch every "this is now live for users" moment
+    # without firing on draft saves.
+    types: [published, released]
+
+# Cancel an in-flight rebuild if a second release event lands while the
+# first is still running — no point queueing two deploys that build the
+# same git ref. The second one wins.
+concurrency:
+  group: vercel-redeploy
+  cancel-in-progress: true
+
+jobs:
+  redeploy:
+    name: Trigger Vercel rebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: POST to Vercel deploy hook
+        env:
+          HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK secret is not set on this repo."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          # -f: fail on HTTP 4xx/5xx so a bad hook URL doesn't silently no-op.
+          # -sS: quiet progress but keep error output.
+          # The hook returns JSON with the new deployment id; we log it so
+          # the Actions run links to the actual build.
+          response=$(curl -fsS -X POST "$HOOK_URL")
+          echo "Vercel response: $response"
+          echo "✓ Rebuild triggered — check https://vercel.com/dashboard for progress."
