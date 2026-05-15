@@ -17,6 +17,10 @@ import {
   MoonIcon,
   MonitorIcon,
 } from './ui';
+import HotkeyRecorder from './HotkeyRecorder';
+import UpdateStatus from './UpdateStatus';
+
+const DEFAULT_TOGGLE_SHORTCUT = 'Control+Shift+D';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: <SunIcon size={13} /> },
@@ -39,6 +43,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
     alwaysOnTop: true,
     launchOnStartup: false,
     clipboardMaxItems: 200,
+    toggleDockShortcut: DEFAULT_TOGGLE_SHORTCUT,
   });
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
@@ -130,27 +135,27 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
         </SectionGroup>
 
         <SectionGroup title="Shortcuts">
-          <SettingRow label="Toggle dock" control={<Keys keys={['Ctrl', 'Shift', 'D']} />} />
+          <SettingRow
+            label="Toggle dock"
+            description="Global hotkey that shows or hides the dock from anywhere"
+            control={
+              <HotkeyRecorder
+                value={settings.toggleDockShortcut || DEFAULT_TOGGLE_SHORTCUT}
+                defaultValue={DEFAULT_TOGGLE_SHORTCUT}
+                onChange={async (accel) => {
+                  const r = await api?.invoke?.('settings:hotkey:set', { accelerator: accel });
+                  if (r?.ok) {
+                    setSettings((prev) => ({ ...prev, toggleDockShortcut: r.accelerator }));
+                  }
+                  return r;
+                }}
+              />
+            }
+          />
         </SectionGroup>
 
         <SectionGroup title="About">
-          <div style={{ padding: 'var(--ds-space-3) 0' }}>
-            <div style={{
-              fontWeight: 'var(--ds-weight-semibold)',
-              fontSize: 'var(--ds-font-base)',
-              color: 'var(--ds-text-strong)',
-              marginBottom: 2,
-            }}>
-              DockShift v1.0.0
-            </div>
-            <div style={{
-              fontSize: 'var(--ds-font-sm)',
-              color: 'var(--ds-text-muted)',
-              lineHeight: 1.5,
-            }}>
-              A floating productivity dock for Windows.
-            </div>
-          </div>
+          <UpdateStatus />
         </SectionGroup>
       </div>
     </ResizablePanel>

@@ -62,6 +62,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Settings
       'settings:get',
       'settings:set',
+      'settings:hotkey:set',
+      // Updater
+      'updater:status',
+      'updater:check',
+      'updater:install',
+      'app:getVersion',
       // Launcher
       'launcher:search',
       'launcher:open',
@@ -106,6 +112,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('dock:positionChanged', handler);
     return () => ipcRenderer.removeListener('dock:positionChanged', handler);
+  },
+  // Auto-updater state pushes — `status` transitions plus download progress.
+  // The renderer renders straight from this stream; one subscription, one
+  // unsubscribe. Latest snapshot also available via `updater:status` invoke.
+  onUpdaterState: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('updater:state', handler);
+    return () => ipcRenderer.removeListener('updater:state', handler);
   },
   onClipboardUpdate: (callback) => {
     const handler = (event, data) => callback(data);

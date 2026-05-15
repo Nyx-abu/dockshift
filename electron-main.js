@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, screen, ipcMain, clipboard, nativeImage, shell, desktopCapturer } from 'electron';
+import { app, BrowserWindow, globalShortcut, screen, ipcMain, clipboard, nativeImage, shell, desktopCapturer, Tray, Menu } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
@@ -1377,23 +1377,253 @@ function toggleWindowVisibility() {
     mainWindow.setIgnoreMouseEvents(!isDockExpanded, { forward: true });
     isVisible = true;
   }
+  refreshTrayMenu();
 }
+
+// ─── Toggle hotkey ────────────────────────────────────────────────────────────
+// User-customizable, persisted in settings.json under `toggleDockShortcut`.
+// Whatever's currently registered lives here so we can unregister cleanly when
+// the user picks a new combo.
+const DEFAULT_TOGGLE_SHORTCUT = 'Control+Shift+D';
+let currentToggleShortcut = null;
+
+function registerToggleShortcut(accelerator) {
+  const accel = String(accelerator || '').trim() || DEFAULT_TOGGLE_SHORTCUT;
+  if (currentToggleShortcut && currentToggleShortcut !== accel) {
+    globalShortcut.unregister(currentToggleShortcut);
+  } else if (currentToggleShortcut === accel && globalShortcut.isRegistered(accel)) {
+    return { ok: true, accelerator: accel };
+  }
+  let ok = false;
+  try {
+    ok = globalShortcut.register(accel, toggleWindowVisibility);
+  } catch (err) {
+    return { ok: false, error: err.message || 'Invalid shortcut' };
+  }
+  if (!ok) {
+    // register() returns false silently when the combo is already taken by
+    // another app or is malformed. Fall back to the previous binding so the
+    // dock isn't left without a hotkey.
+    if (currentToggleShortcut && currentToggleShortcut !== accel) {
+      globalShortcut.register(currentToggleShortcut, toggleWindowVisibility);
+    }
+    return { ok: false, error: 'Shortcut is already in use by another app' };
+  }
+  currentToggleShortcut = accel;
+  refreshTrayMenu();
+  return { ok: true, accelerator: accel };
+}
+
+ipcMain.handle('settings:hotkey:set', (_e, { accelerator } = {}) => {
+  const result = registerToggleShortcut(accelerator);
+  if (result.ok) {
+    writeJsonAtomic(settingsFile(), {
+      ...readSettings(),
+      toggleDockShortcut: result.accelerator,
+    });
+  }
+  return result;
+});
+
+// ─── System tray ──────────────────────────────────────────────────────────────
+let tray = null;
+
+function trayIconPath() {
+  // Bundled inside the asar in packaged builds (see package.json build.files).
+  // In dev __dirname resolves to the repo root so the same path works.
+  const ico = path.join(app.getAppPath(), 'assets', 'icon.ico');
+  return fs.existsSync(ico) ? ico : path.join(app.getAppPath(), 'assets', 'icon.png');
+}
+
+function formatAcceleratorForTray(accel) {
+  if (!accel) return '';
+  return accel
+    .replace(/CommandOrControl/gi, 'Ctrl')
+    .replace(/Control/gi, 'Ctrl')
+    .replace(/\bMeta\b/g, 'Win')
+    .replace(/\+/g, '+');
+}
+
+function buildTrayMenu() {
+  const shortcut = formatAcceleratorForTray(currentToggleShortcut || DEFAULT_TOGGLE_SHORTCUT);
+  return Menu.buildFromTemplate([
+    {
+      label: isVisible ? 'Hide Dock' : 'Show Dock',
+      accelerator: currentToggleShortcut || DEFAULT_TOGGLE_SHORTCUT,
+      click: toggleWindowVisibility,
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit DockShift',
+      click: () => app.quit(),
+    },
+  ]);
+}
+
+function refreshTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  tray.setContextMenu(buildTrayMenu());
+  const shortcut = formatAcceleratorForTray(currentToggleShortcut || DEFAULT_TOGGLE_SHORTCUT);
+  tray.setToolTip(`DockShift • ${shortcut}`);
+}
+
+function createTray() {
+  if (tray) return;
+  const image = nativeImage.createFromPath(trayIconPath());
+  if (image.isEmpty()) {
+    console.warn('[tray] icon not found at', trayIconPath());
+    return;
+  }
+  tray = new Tray(image);
+  tray.on('click', toggleWindowVisibility);
+  refreshTrayMenu();
+}
+
+// ─── Auto-updater ─────────────────────────────────────────────────────────────
+// electron-updater pulls release manifests from GitHub Releases (configured in
+// package.json `build.publish`). We expose a small state machine to the
+// renderer instead of relying on the OS toast that `checkForUpdatesAndNotify`
+// produces — users get a real in-app indicator and a manual "Check now" /
+// "Restart and install" pair in Settings → About.
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+let updateCheckTimer = null;
+
+const updateState = {
+  status: 'idle',          // idle | checking | available | downloading | downloaded | not-available | error | unsupported
+  currentVersion: app.getVersion(),
+  latestVersion: null,
+  releaseNotes: null,
+  releaseName: null,
+  progress: null,          // { percent, transferred, total, bytesPerSecond }
+  error: null,
+  lastCheckedAt: null,
+};
+
+function broadcastUpdateState() {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('updater:state', updateState);
+  }
+}
+
+function setUpdateState(patch) {
+  Object.assign(updateState, patch);
+  broadcastUpdateState();
+}
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) {
+    setUpdateState({ status: 'unsupported' });
+    return;
+  }
+
+  // Defaults are already what we want (autoDownload=true, autoInstallOnAppQuit=true)
+  // — set explicitly so a future electron-updater bump can't surprise us.
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = !!readSettings().receivePrerelease;
+
+  autoUpdater.on('checking-for-update', () => {
+    setUpdateState({ status: 'checking', error: null });
+  });
+  autoUpdater.on('update-available', (info) => {
+    setUpdateState({
+      status: 'downloading',
+      latestVersion: info?.version || null,
+      releaseNotes: typeof info?.releaseNotes === 'string' ? info.releaseNotes : null,
+      releaseName: info?.releaseName || null,
+      progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 },
+      error: null,
+    });
+  });
+  autoUpdater.on('update-not-available', (info) => {
+    setUpdateState({
+      status: 'not-available',
+      latestVersion: info?.version || updateState.currentVersion,
+      lastCheckedAt: new Date().toISOString(),
+      error: null,
+    });
+  });
+  autoUpdater.on('download-progress', (p) => {
+    setUpdateState({
+      status: 'downloading',
+      progress: {
+        percent: Math.round(p?.percent || 0),
+        transferred: p?.transferred || 0,
+        total: p?.total || 0,
+        bytesPerSecond: p?.bytesPerSecond || 0,
+      },
+    });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    setUpdateState({
+      status: 'downloaded',
+      latestVersion: info?.version || updateState.latestVersion,
+      progress: null,
+      error: null,
+    });
+  });
+  autoUpdater.on('error', (err) => {
+    console.warn('[updater] error:', err?.message || err);
+    setUpdateState({
+      status: 'error',
+      error: (err && err.message) ? err.message : 'Update check failed',
+    });
+  });
+
+  // Initial check + recurring poll. Long sessions still see updates without
+  // needing an app restart.
+  triggerUpdateCheck();
+  updateCheckTimer = setInterval(triggerUpdateCheck, UPDATE_CHECK_INTERVAL_MS);
+}
+
+function triggerUpdateCheck() {
+  if (!app.isPackaged) {
+    setUpdateState({ status: 'unsupported' });
+    return;
+  }
+  // Don't stomp an in-flight download with a fresh check.
+  if (updateState.status === 'downloading' || updateState.status === 'downloaded') return;
+  setUpdateState({ status: 'checking', error: null });
+  autoUpdater.checkForUpdates().catch((err) => {
+    setUpdateState({
+      status: 'error',
+      error: (err && err.message) ? err.message : 'Update check failed',
+    });
+  });
+}
+
+ipcMain.handle('updater:status', () => updateState);
+
+ipcMain.handle('updater:check', () => {
+  triggerUpdateCheck();
+  return updateState;
+});
+
+ipcMain.handle('updater:install', () => {
+  if (!app.isPackaged || updateState.status !== 'downloaded') {
+    return { ok: false, error: 'No update is ready to install' };
+  }
+  // isSilent=true uses the NSIS one-click installer flow; isForceRunAfter=true
+  // relaunches DockShift after the install completes.
+  setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  return { ok: true };
+});
+
+ipcMain.handle('app:getVersion', () => app.getVersion());
 
 app.on('ready', () => {
   createWindow();
+  createTray();
 
-  // Register Ctrl + Shift + D to toggle visibility
-  globalShortcut.register('Control+Shift+D', () => {
-    toggleWindowVisibility();
-  });
-
-  // Check for updates from GitHub Releases (packaged builds only — in dev
-  // there's no published artifact and electron-updater would just error).
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.warn('[updater] Update check failed:', err.message);
-    });
+  // Register the user's saved toggle shortcut, falling back to the default if
+  // it's missing or no longer valid (e.g. another app claimed it).
+  const saved = readSettings().toggleDockShortcut;
+  const r = registerToggleShortcut(saved || DEFAULT_TOGGLE_SHORTCUT);
+  if (!r.ok && saved) {
+    registerToggleShortcut(DEFAULT_TOGGLE_SHORTCUT);
   }
+
+  setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {
@@ -1411,4 +1641,12 @@ app.on('activate', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (clipboardHistory) clipboardHistory.stop();
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
 });
