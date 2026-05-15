@@ -23,7 +23,7 @@ on:
     # of pre-release state — covers the "publish a pre-release as stable"
     # path. Together they catch every "this is now live for users" moment
     # without firing on draft saves.
-    types: [published, released]
+    types: [published, released, edited]
 
 # Cancel an in-flight rebuild if a second release event lands while the
 # first is still running — no point queueing two deploys that build the
