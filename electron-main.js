@@ -1485,7 +1485,7 @@ function createTray() {
 // 24h while running. Ping payload is anonymous (stable UUID + version + OS
 // string + locale); the server adds country/region from Vercel's edge geo
 // headers. No personally identifying information ever leaves the machine.
-const HEARTBEAT_ENDPOINT = 'https://dock-flow.vercel.app/api/heartbeat';
+const HEARTBEAT_ENDPOINT = 'https://dock-shift.vercel.app/api/heartbeat';
 const HEARTBEAT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let heartbeatTimer = null;
 let lastHeartbeatAt = 0;
