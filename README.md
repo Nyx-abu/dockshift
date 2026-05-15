@@ -48,13 +48,15 @@ more — always within reach, never in your way.
 
 <br/><br/>
 
-<video src="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace-demo.mp4" controls muted autoplay loop playsinline width="92%" poster="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace.png">
+<a href="https://vimeo.com/1192599015" title="Watch the 30-second workspace demo on Vimeo">
+  <img src="assets/workspace.png" alt="DockShift workspace snapshots — click to watch the live demo" width="92%" />
+</a>
 
-<a href="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace-demo.mp4">▶ Watch the workspace demo</a> · static preview ↓
+<br/><br/>
 
-<img src="assets/workspace.png" alt="DockShift workspace snapshots panel" width="92%" />
-
-</video>
+<a href="https://vimeo.com/1192599015">
+  <img src="https://img.shields.io/badge/▶%20WATCH%20IT%20LIVE-30%20second%20demo-7AA2F7?style=for-the-badge&labelColor=1A1B26&logo=vimeo&logoColor=white" alt="Watch the workspace demo on Vimeo" height="42" />
+</a>
 
 </div>
 
@@ -302,5 +304,9 @@ Pull requests are welcome — bug fixes, new panels, polish, all of it.
 
 <sub>Built for people who keep too many windows open.</sub><br/>
 <sub><b>DockShift</b> — because Alt+Tab is so last decade.</sub>
+
+<br/><br/>
+
+<sub>Powered by <a href="https://shineup.digital"><b>Shineup</b></a></sub>
 
 </div>
