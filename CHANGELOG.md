@@ -7,6 +7,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0-rc.2] - 2026-05-15
 ## [0.9.0] - 2026-05-15
 
 First public beta. The app is feature-complete for everyday use; we're shipping at 0.9

@@ -32,7 +32,20 @@ jobs:
       - name: Build renderer
         run: npm run build
 
+      # Detect pre-release from the tag name. Anything with a hyphen suffix
+      # (e.g. `v0.9.0-rc.1`, `v1.0.0-beta.3`) goes out as Pre-release; clean
+      # `vX.Y.Z` tags go out as the public Latest release. No more drafts.
+      - name: Detect release type
+        id: rel
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_name }}" == *-* ]]; then
+            echo "type=prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "type=release" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and publish installer
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --publish always --config.publish.releaseType=${{ steps.rel.outputs.type }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

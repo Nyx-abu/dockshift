@@ -1,6 +1,6 @@
 {
   "name": "dockshift",
-  "version": "0.9.0-rc.1",
+  "version": "0.9.0-rc.2",
   "description": "An open-source floating productivity dock for Windows",
   "main": "electron-main.js",
   "type": "module",
@@ -88,11 +88,16 @@
       "icon": "assets/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "shortcutName": "DockShift",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "publish": {
       "provider": "github"
