@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DockMenu from './components/DockMenu';
 import './styles/App.css';
 
@@ -14,18 +14,19 @@ export default function App() {
   // attribute below; CSS does the actual alignment. Kept in sync with the
   // main process so changing it in Settings takes effect live.
   const [dockPos, setDockPos] = useState('bottom-center');
+  // Once the main process has handed us the saved layout we flip this true,
+  // and only then does the activePanel-effect start writing back. Prevents
+  // the initial `null` from clobbering whatever the user had open.
+  const layoutHydrated = useRef(false);
 
   const api = useMemo(() => window.electronAPI, []);
 
   const handleAction = (action) => {
     if (action === 'snaps-restore') {
-      // Handle snapshot restore
-      console.log('Restoring workspace from snapshot...');
-      // The actual restore logic is in DockMenu component
-    } else {
-      console.log('Action:', action);
-      setActivePanel(action);
+      // Restore handled by DockMenu — don't change activePanel.
+      return;
     }
+    setActivePanel(action);
   };
 
   useEffect(() => {
@@ -62,6 +63,34 @@ export default function App() {
       ?.catch(() => {});
     return api.onDockPosition?.((pos) => { if (pos) setDockPos(pos); });
   }, [api]);
+
+  // Hydrate the last-open panel from the persisted dock layout. Until this
+  // resolves we keep `layoutHydrated.current` false so the save-effect below
+  // doesn't write a `null` activePanel over the user's saved one.
+  useEffect(() => {
+    let cancelled = false;
+    api?.invoke?.('dock:layout:get')
+      ?.then((layout) => {
+        if (cancelled) return;
+        if (layout?.activeTabId) setActivePanel(layout.activeTabId);
+        layoutHydrated.current = true;
+      })
+      ?.catch(() => { layoutHydrated.current = true; });
+    return () => { cancelled = true; };
+  }, [api]);
+
+  // Persist the active panel whenever it changes. The main process debounces
+  // the actual disk write; this side just fires a single IPC per change.
+  useEffect(() => {
+    if (!layoutHydrated.current) return;
+    api?.invoke?.('dock:layout:save', {
+      layout: {
+        activeTabId: activePanel,
+        openWidgets: activePanel ? [activePanel] : [],
+        position: dockPos,
+      },
+    })?.catch(() => {});
+  }, [api, activePanel, dockPos]);
 
   return (
     <div

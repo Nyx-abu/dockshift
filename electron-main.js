@@ -422,7 +422,6 @@ function getWorkArea() {
 function getSnapshotManager() {
   if (!snapshotManager) {
     const workspaceDir = path.join(app.getPath('userData'), 'workspaces');
-    console.log('[Workspace] Base directory:', workspaceDir);
     snapshotManager = new SnapshotManager(workspaceDir);
   }
   return snapshotManager;
@@ -483,6 +482,10 @@ function createWindow() {
   // Apply saved preferences so they actually take effect on launch.
   applySettings(readSettings());
 
+  // Hydrate the in-memory dock layout from disk so the renderer can ask
+  // `dock:layout:get` and immediately get the user's last session.
+  currentDockLayout = readDockLayout();
+
   // DevTools is NOT auto-opened. While DevTools is open, Chromium overlays the
   // live viewport size in the page corner on every window resize — which fires
   // each time the dock collapses/expands, and reads as a distracting flicker.
@@ -492,14 +495,39 @@ function createWindow() {
   }
 }
 
+// In-memory mirror of the persisted dock layout. The renderer pushes updates
+// here every time the user opens/closes a panel; we lazy-write them to disk
+// (debounced) and read them on startup. `getCurrentDockLayoutSnapshot()`
+// exposes the live value to the workspace snapshot path.
+const dockLayoutFile = () => path.join(app.getPath('userData'), 'dock-layout.json');
+const DEFAULT_DOCK_LAYOUT = {
+  activeTabId: null,
+  openWidgets: [],
+  position: 'bottom-center',
+};
+let currentDockLayout = { ...DEFAULT_DOCK_LAYOUT };
+let dockLayoutWriteTimer = null;
+
+function readDockLayout() {
+  const stored = readJson(dockLayoutFile(), null);
+  if (!stored || typeof stored !== 'object') return { ...DEFAULT_DOCK_LAYOUT };
+  return { ...DEFAULT_DOCK_LAYOUT, ...stored };
+}
+
+function scheduleDockLayoutWrite() {
+  if (dockLayoutWriteTimer) clearTimeout(dockLayoutWriteTimer);
+  dockLayoutWriteTimer = setTimeout(() => {
+    dockLayoutWriteTimer = null;
+    try {
+      writeJsonAtomic(dockLayoutFile(), currentDockLayout);
+    } catch (err) {
+      console.warn('[dock-layout] write failed:', err.message);
+    }
+  }, 400);
+}
+
 function getCurrentDockLayoutSnapshot() {
-  // TODO: integrate with your real dock state (position, width, active tab)
-  return {
-    position: 'right',
-    width: 480,
-    activeTabId: 'workspaces',
-    openWidgets: ['workspaces'],
-  };
+  return { ...currentDockLayout };
 }
 
 function getCurrentTerminalSnapshots() {
@@ -539,7 +567,6 @@ ipcMain.handle('workspace:save', async (_event, { name }) => {
   // Sanitize up front so the stored `name` field matches the on-disk filename
   // and never carries path-traversal payloads.
   const safeName = SnapshotManager.sanitizeName(name);
-  console.log('[IPC] workspace:save', safeName);
 
   const apps = await windowTracker.captureAppSnapshotsAsync();
   const terminals = getCurrentTerminalSnapshots();
@@ -559,14 +586,12 @@ ipcMain.handle('workspace:save', async (_event, { name }) => {
 });
 
 ipcMain.handle('workspace:list', async () => {
-  console.log('[IPC] workspace:list');
   const manager = getSnapshotManager();
   const snapshots = await manager.listSnapshots();
   return snapshots;
 });
 
 ipcMain.handle('workspace:restore', async (event, { name }) => {
-  console.log('[IPC] workspace:restore', name);
   const manager = getSnapshotManager();
   const snapshot = await manager.loadSnapshot(name);
   if (!snapshot) throw new Error(`Workspace "${name}" not found`);
@@ -581,7 +606,6 @@ ipcMain.handle('workspace:restore', async (event, { name }) => {
 });
 
 ipcMain.handle('workspace:delete', async (_event, { name }) => {
-  console.log('[IPC] workspace:delete', name);
   const manager = getSnapshotManager();
   await manager.deleteSnapshot(name);
   return { ok: true };
@@ -615,6 +639,25 @@ ipcMain.handle('dock:setExpanded', (_event, { expanded }) => {
 ipcMain.handle('dock:setMouseIgnore', (_event, { ignore }) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
   mainWindow.setIgnoreMouseEvents(!!ignore, { forward: true });
+  return { ok: true };
+});
+
+// Read the persisted dock layout (active panel, open widgets, edge). Renderer
+// calls this once on mount so the dock reopens to whatever the user had open
+// last. Returns the in-memory mirror so it never blocks on disk.
+ipcMain.handle('dock:layout:get', () => getCurrentDockLayoutSnapshot());
+
+// Renderer pushes layout changes here whenever the user opens/closes a panel
+// or the dock edge changes. Merge into the in-memory mirror and schedule a
+// debounced write so we don't hammer disk on rapid toggles.
+ipcMain.handle('dock:layout:save', (_event, { layout } = {}) => {
+  if (!layout || typeof layout !== 'object') return { ok: false };
+  const next = { ...currentDockLayout };
+  if ('activeTabId' in layout) next.activeTabId = layout.activeTabId ?? null;
+  if (Array.isArray(layout.openWidgets)) next.openWidgets = layout.openWidgets.slice(0, 32);
+  if (typeof layout.position === 'string') next.position = layout.position;
+  currentDockLayout = next;
+  scheduleDockLayoutWrite();
   return { ok: true };
 });
 
@@ -765,10 +808,81 @@ async function runChat(prompt, onChunk, signal) {
   return provider.chat({ apiKey, model, prompt, onChunk, signal });
 }
 
+// Total-time and idle timeouts so a slow or stalled provider doesn't hang the
+// chat panel forever. Tunable here — generous enough to absorb cold-start
+// latency on Ollama / OpenRouter, tight enough to surface a real network
+// failure within a minute.
+const AI_CHAT_TOTAL_TIMEOUT_MS = 60_000;     // non-streaming: hard cap on the whole request
+const AI_STREAM_IDLE_TIMEOUT_MS = 60_000;    // streaming: max gap between chunks
+const AI_STREAM_FIRST_CHUNK_TIMEOUT_MS = 45_000; // streaming: max wait for the first chunk
+
+class AiTimeoutError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'AiTimeoutError';
+    this.code = 'TIMEOUT';
+  }
+}
+
+/**
+ * Run `runChat` under an AbortController. If `idleMs` is set, the timer
+ * resets every time a chunk arrives (idle/streaming mode). Otherwise the
+ * timer is a single hard deadline (total/non-streaming mode).
+ */
+async function runChatWithTimeout(prompt, onChunk, { totalMs, idleMs, firstChunkMs }) {
+  const ctrl = new AbortController();
+  let timer = null;
+  let receivedChunk = false;
+  const trip = (msg) => {
+    if (ctrl.signal.aborted) return;
+    ctrl.abort(new AiTimeoutError(msg));
+  };
+  const arm = (ms, msg) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => trip(msg), ms);
+  };
+
+  if (idleMs) {
+    arm(firstChunkMs ?? idleMs, 'AI request stalled — no response from provider');
+  } else if (totalMs) {
+    arm(totalMs, 'AI request timed out');
+  }
+
+  const wrappedChunk = onChunk
+    ? (delta) => {
+        receivedChunk = true;
+        if (idleMs) arm(idleMs, 'AI stream stalled — no new tokens');
+        onChunk(delta);
+      }
+    : undefined;
+
+  try {
+    return await runChat(prompt, wrappedChunk, ctrl.signal);
+  } catch (err) {
+    // Surface our timeout as the canonical error even when fetch wraps it.
+    if (ctrl.signal.aborted && ctrl.signal.reason instanceof AiTimeoutError) {
+      throw ctrl.signal.reason;
+    }
+    if (err?.name === 'AbortError' && idleMs && !receivedChunk) {
+      throw new AiTimeoutError('AI request stalled — no response from provider');
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Non-streaming chat — kept for callers that just want the final text.
 ipcMain.handle('ai:chat', async (_e, { prompt }) => {
-  const text = await runChat(prompt);
-  return { text: text || 'No response.' };
+  try {
+    const text = await runChatWithTimeout(prompt, undefined, { totalMs: AI_CHAT_TOTAL_TIMEOUT_MS });
+    return { text: text || 'No response.' };
+  } catch (err) {
+    if (err instanceof AiTimeoutError) {
+      return { text: '', error: err.message, code: 'TIMEOUT' };
+    }
+    throw err;
+  }
 });
 
 // Streaming chat. The renderer calls this, then listens on the push channels
@@ -784,11 +898,16 @@ ipcMain.handle('ai:chatStream', async (e, { prompt }) => {
   // can start listening; chunks arrive over the push channels.
   (async () => {
     try {
-      const text = await runChat(prompt, (delta) => send('ai:streamChunk', { delta }));
+      const text = await runChatWithTimeout(
+        prompt,
+        (delta) => send('ai:streamChunk', { delta }),
+        { idleMs: AI_STREAM_IDLE_TIMEOUT_MS, firstChunkMs: AI_STREAM_FIRST_CHUNK_TIMEOUT_MS },
+      );
       send('ai:streamDone', { text: text || 'No response.' });
     } catch (err) {
       console.error('[AI:chatStream] Error:', err.message);
-      send('ai:streamError', { error: err.message || 'Failed to get response' });
+      const code = err instanceof AiTimeoutError ? 'TIMEOUT' : (err.code || undefined);
+      send('ai:streamError', { error: err.message || 'Failed to get response', code });
     }
   })();
   return { streamId };
@@ -1076,10 +1195,21 @@ ipcMain.handle('launcher:open', async (_e, { path: appPath, type }) => {
 // glyphs. Results are cached by path; an unresolvable path returns '' and the
 // renderer falls back to its generic icon. Bare command names (e.g. `calc.exe`)
 // and URI schemes (e.g. `ms-settings:`) won't resolve — that's expected.
+//
+// LRU-bounded: a `Map` preserves insertion order, so re-`set`ing a key on hit
+// promotes it to "most recent." Once we hit `ICON_CACHE_LIMIT`, the oldest
+// entry (front of iteration) is evicted. Caps long-session memory growth on
+// machines with thousands of installed apps.
+const ICON_CACHE_LIMIT = 500;
 const iconCache = new Map();
 ipcMain.handle('app:getIcon', async (_e, { path: filePath } = {}) => {
   if (typeof filePath !== 'string' || !filePath || filePath.length > 1024) return '';
-  if (iconCache.has(filePath)) return iconCache.get(filePath);
+  if (iconCache.has(filePath)) {
+    const cached = iconCache.get(filePath);
+    iconCache.delete(filePath);
+    iconCache.set(filePath, cached);
+    return cached;
+  }
   let url = '';
   try {
     if (fs.existsSync(filePath)) {
@@ -1088,6 +1218,9 @@ ipcMain.handle('app:getIcon', async (_e, { path: filePath } = {}) => {
     }
   } catch (_) { /* unresolvable — fall through to '' */ }
   iconCache.set(filePath, url);
+  if (iconCache.size > ICON_CACHE_LIMIT) {
+    iconCache.delete(iconCache.keys().next().value);
+  }
   return url;
 });
 

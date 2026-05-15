@@ -1,6 +1,6 @@
 {
   "name": "dockshift",
-  "version": "1.0.0",
+  "version": "0.9.0-rc.1",
   "description": "An open-source floating productivity dock for Windows",
   "main": "electron-main.js",
   "type": "module",
@@ -11,7 +11,22 @@
     "build": "vite build",
     "preview": "vite preview",
     "dist": "npm run build && electron-builder",
-    "dist:dir": "npm run build && electron-builder --dir"
+    "dist:dir": "npm run build && electron-builder --dir",
+    "icons": "node scripts/generate-icons.mjs",
+    "release": "node scripts/release.mjs"
+  },
+  "author": {
+    "name": "Salahudeen",
+    "email": "thisissalah.dev@gmail.com",
+    "url": "https://github.com/Salah-XD"
+  },
+  "homepage": "https://dock-flow.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Salah-XD/dockshift.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Salah-XD/dockshift/issues"
   },
   "keywords": [
     "electron",
@@ -22,7 +37,6 @@
     "productivity",
     "windows"
   ],
-  "author": "",
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.43.0",
@@ -43,6 +57,8 @@
     "concurrently": "^8.2.2",
     "electron": "^40.6.1",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5",
     "vite": "^5.0.8"
   },
   "build": {
@@ -52,11 +68,15 @@
       "output": "release",
       "buildResources": "assets"
     },
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
     "files": [
       "dist/**/*",
       "electron-main.js",
-      "preload.js",
+      "electron-ai-providers.js",
       "electron-persistence.js",
+      "electron-secrets.js",
+      "preload.js",
       "src/workspace/**/*",
       "package.json"
     ],

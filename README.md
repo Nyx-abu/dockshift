@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/dockshift%20banner.png" alt="DockShift" width="100%" />
+<img src="assets/dockshift-banner.png" alt="DockShift" width="100%" />
 
 <br/><br/>
 
@@ -18,7 +18,7 @@ more — always within reach, never in your way.
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&labelColor=1A1B26&logo=windows11&logoColor=4CC2FF)](https://www.microsoft.com/windows)
 
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square&labelColor=1A1B26)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-7AA2F7?style=flat-square&labelColor=1A1B26)](https://github.com/Salah-XD/dockshift/releases)
+[![Version](https://img.shields.io/badge/Version-0.9.0_beta-7AA2F7?style=flat-square&labelColor=1A1B26)](https://github.com/Salah-XD/dockshift/releases)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-BB9AF7?style=flat-square&labelColor=1A1B26)](#-contributing)
 [![Star on GitHub](https://img.shields.io/badge/Star_on_GitHub-F5A623?style=flat-square&labelColor=1A1B26&logo=github&logoColor=white)](https://github.com/Salah-XD/dockshift)
 
@@ -30,7 +30,7 @@ more — always within reach, never in your way.
 
 <div align="center">
 
-<img src="assets/dock%20preview.png" alt="The DockShift dock bar" width="92%" />
+<img src="assets/dock-preview.png" alt="The DockShift dock bar" width="92%" />
 
 <sub>One translucent bar, floating above everything. Tap an icon — a panel slides out. Click away — it's gone.</sub>
 
@@ -58,7 +58,7 @@ Your tools come to *you*.
 
 <table>
 <tr>
-<td width="55%"><img src="assets/ai%20assitant.png" alt="AI Assistant" width="100%" /></td>
+<td width="55%"><img src="assets/ai-assistant.png" alt="AI Assistant" width="100%" /></td>
 <td width="45%">
 
 ### 🤖 Bring-Your-Own-Model AI
@@ -80,7 +80,14 @@ project context in one click.** Expand any snapshot to see exactly what it captu
 app icons and all. There's no built-in Windows equivalent.
 
 </td>
-<td width="55%"><img src="assets/workspace.png" alt="Workspace Snapshots" width="100%" /></td>
+<td width="55%">
+
+https://github.com/Salah-XD/dockshift/raw/main/assets/workspace-demo.mp4
+
+<sub><sup>Demo: save → close everything → restore in one click. Static preview ↓ if your viewer doesn't autoplay.</sup></sub>
+
+<img src="assets/workspace.png" alt="Workspace Snapshots panel" width="100%" />
+</td>
 </tr>
 <tr>
 <td width="55%"><img src="assets/terminal.png" alt="Terminal" width="100%" /></td>
@@ -104,10 +111,10 @@ Hit record, get a transcript — powered by your AI provider's speech model. Aud
 processed entirely in the main process, so your API key stays server-side.
 
 </td>
-<td width="55%"><img src="assets/voice%20to%20text.png" alt="Voice to Text" width="100%" /></td>
+<td width="55%"><img src="assets/voice-to-text.png" alt="Voice to Text" width="100%" /></td>
 </tr>
 <tr>
-<td width="55%"><img src="assets/setttings.png" alt="Settings" width="100%" /></td>
+<td width="55%"><img src="assets/settings.png" alt="Settings" width="100%" /></td>
 <td width="45%">
 
 ### ⚙️ Settings, Done Right
@@ -196,6 +203,12 @@ toggle it anytime.
 **Add your AI provider** in **Settings → AI & Models** — paste a key (stored encrypted) or
 pick Ollama for a fully local setup. _Optional:_ copy `.env.example` to `.env` for a
 dev-time Gemini key.
+
+> [!NOTE]
+> **Installing the prebuilt `.exe` and Windows says "Unknown publisher"?** That's expected —
+> DockShift is open source and not yet code-signed. A Microsoft cert costs ~$200/yr, so we're
+> waiting until the first hundred installs to buy one. Click **More info** → **Run anyway**.
+> Or read the source / build it yourself.
 
 <details>
 <summary><b>More commands</b></summary>

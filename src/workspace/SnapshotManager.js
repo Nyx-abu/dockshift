@@ -93,9 +93,7 @@ export class SnapshotManager {
     try {
       this.ensureDir();
       const filePath = this.getSnapshotPath(name);
-      console.log('[Workspace] Saving to:', filePath);
       writeJsonAtomic(filePath, snapshot);
-      console.log('[Workspace] Save successful');
       return filePath;
     } catch (err) {
       console.error('[Workspace] Save failed:', err);
@@ -109,7 +107,6 @@ export class SnapshotManager {
    */
   async listWorkspaces() {
     this.ensureDir();
-    console.log('[Workspace] Listing from directory:', this.baseDir);
     const files = fs.readdirSync(this.baseDir);
     return files
       .filter((file) => file.endsWith('.json'))
@@ -122,7 +119,6 @@ export class SnapshotManager {
    */
   async listSnapshots() {
     this.ensureDir();
-    console.log('[Workspace] Reading snapshots from:', this.baseDir);
     const files = fs.readdirSync(this.baseDir);
     /** @type {WorkspaceSnapshot[]} */
     const snapshots = [];
@@ -147,7 +143,6 @@ export class SnapshotManager {
   async loadSnapshot(name) {
     this.ensureDir();
     const filePath = this.getSnapshotPath(name);
-    console.log('[Workspace] Loading snapshot from:', filePath);
     // readJson returns null for both missing and corrupted files; a corrupted
     // file is preserved as a `.corrupt-<ts>` backup with a user notification.
     return /** @type {WorkspaceSnapshot|null} */ (readJson(filePath, null));
@@ -159,7 +154,6 @@ export class SnapshotManager {
   async deleteSnapshot(name) {
     this.ensureDir();
     const filePath = this.getSnapshotPath(name);
-    console.log('[Workspace] Deleting snapshot:', filePath);
     try {
       fs.unlinkSync(filePath);
     } catch (err) {

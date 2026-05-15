@@ -7,7 +7,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-15
+
+First public beta. The app is feature-complete for everyday use; we're shipping at 0.9
+(not 1.0) because the Windows installer is not yet code-signed and we want a beat of
+real-world feedback before declaring 1.0.
+
 ### Added
+- **Workspace snapshots actually persist your dock state** — the panel you had open is
+  reopened on next launch (resolved a long-standing TODO; the dock layout now round-trips
+  through `dock-layout.json` in `userData`).
+- **AI request timeouts** — chat hangs no more than 60s (non-streaming) or 60s of idle
+  silence (streaming, with a 45s grace for the first chunk). Times out cleanly with a
+  `TIMEOUT` error code instead of an infinite spinner.
 - **Light / dark / system theme.** A CSS custom-property token system (`theme.css`) with a
   `ThemeContext`; every panel reads theme tokens instead of hardcoded colors. Switchable from
   Settings → Appearance; the preference persists.
@@ -21,6 +33,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   add types — replacing the previous generic actions.
 - `electron-builder` configuration — `npm run dist` produces a Windows NSIS installer and a
   portable build.
+- `npm run icons` — one-shot regenerator for `assets/icon.{png,ico}` from a single source PNG.
 - Auto-update via `electron-updater`, wired to GitHub Releases (packaged builds only).
 - GitHub Actions release workflow that builds and publishes the installer on version tags.
 - Atomic JSON persistence with corrupted-file recovery: stored files are written via a
@@ -28,13 +41,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with a user notification instead of being silently discarded.
 - Open-source project files: `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and
   pull-request templates.
+- `package.json` author / repository / bugs / homepage fields so the Windows installer's
+  Publisher field is no longer blank.
 
 ### Changed
 - Rebranded from "Float Dock" to **DockShift**.
 - `.env` parsing now handles quoted values and inline comments instead of storing them
   verbatim.
+- `iconCache` is now LRU-bounded at 500 entries — long sessions with many launched apps no
+  longer leak memory unboundedly.
 
 ### Fixed
+- **Packaged app could not start** — `electron-ai-providers.js` and `electron-secrets.js`
+  were imported by `electron-main.js` but missing from `build.files`, so the .exe would have
+  thrown `Cannot find module` at startup. Both now bundled.
+- **Packaged renderer was blank** — Vite's default `base: '/'` resolved asset paths to the
+  drive root under `file://`, so the bundle 404'd and the dock window appeared invisible.
+  Set `base: './'`.
 - Path traversal in workspace snapshot names — names are now sanitized to a safe filename
   component before touching the filesystem.
 - Shell injection via a crafted workspace `cwd` — the working directory is no longer
@@ -42,12 +65,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   metacharacters.
 - The PTY environment filter now strips any secret-looking variable by pattern, not just a
   fixed list of known key names.
+- 17 stray `console.log` calls removed from main-process and workspace code (kept
+  `console.warn`/`console.error` for genuine diagnostics).
+- Asset filenames de-typo'd and de-spaced (`ai assitant.png`, `setttings.png`,
+  `dockshift banner.png`, `dock preview.png`, `voice to text.png`).
 
 ### Removed
 - The broken `npm start` script.
-
-## [1.0.0] - 2026
-
-Initial release as Float Dock — a floating productivity dock for Windows with clipboard
-history, workspace snapshots, an AI assistant, terminal, browser, screenshots, voice-to-text,
-notes, and a quick launcher.

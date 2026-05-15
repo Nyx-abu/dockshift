@@ -201,17 +201,6 @@ $results | ConvertTo-Json -Depth 6 -Compress
       bounds: r.bounds,
     }));
 
-    // Debug logging for each captured window
-    for (const w of snapshots) {
-      // eslint-disable-next-line no-console
-      console.log(
-        '[WindowTracker] Captured window:',
-        'pid=', w.pid,
-        'exe=', w.executablePath,
-        'title=', w.windowTitle
-      );
-    }
-
     return snapshots;
   }
 
@@ -242,19 +231,11 @@ $results | ConvertTo-Json -Depth 6 -Compress
 
       if (alreadyRunning && alreadyRunning.length > 0) {
         const target = alreadyRunning[0];
-        console.log(
-          `[WindowTracker] App already running: ${snap.processName}, moving window`
-        );
         // eslint-disable-next-line no-await-in-loop
         await this.setWindowBoundsByPid(target.pid, snap.bounds);
         continue;
       }
 
-      console.log(
-        `[WindowTracker] Launching app: ${snap.executablePath} ${(snap.launchArgs || []).join(
-          ' '
-        )}`
-      );
       try {
         // eslint-disable-next-line no-await-in-loop
         await this.launchAndPositionApp(snap);
@@ -321,7 +302,6 @@ $SWP_NOACTIVATE = 0x0010
         (w) => w.executablePath.toLowerCase() === snap.executablePath.toLowerCase()
       );
       if (match) {
-        console.log('[WindowTracker] Found launched window, setting bounds...');
         // eslint-disable-next-line no-await-in-loop
         await this.setWindowBoundsByHwnd(match.hwnd, snap.bounds);
         return;

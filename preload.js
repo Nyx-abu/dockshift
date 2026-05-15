@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'dock:applyLayout',
       'dock:setExpanded',
       'dock:setMouseIgnore',
+      'dock:layout:get',
+      'dock:layout:save',
       // Notes
       'notes:list',
       'notes:save',

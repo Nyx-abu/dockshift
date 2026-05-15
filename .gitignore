@@ -1,12 +1,23 @@
 node_modules/
+
+# Build outputs
 dist/
+release/
+out/
+
+# Electron-builder local cache (rarely lands in repo, but cheap to ignore)
+.electron-builder/
+
+# Logs / OS / editor noise
 *.log
 .DS_Store
+Thumbs.db
+.cursor/
+.idea/
+.vscode/
+
+# Env files (never commit secrets)
 .env
 .env.local
 .env.production
 .env.*.local
-out/
-.cursor/
-.idea/
-.vscode/
