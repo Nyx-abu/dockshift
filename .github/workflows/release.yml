@@ -51,11 +51,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # electron-builder uploads the installer but leaves the release body
-      # empty. Ask GitHub to auto-generate notes from commits/PRs between the
-      # previous tag and this one. Runs after the artifact upload so the
-      # release definitely exists.
+      # empty. Use the REST /releases/generate-notes endpoint to build the
+      # changelog from commits/PRs since the previous tag, then pipe it into
+      # `gh release edit -F -`. Doing it via the API (not `gh release edit
+      # --generate-notes`) so it doesn't depend on the runner's gh version.
       - name: Generate release notes
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --generate-notes
+        run: |
+          gh api -X POST repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name=${{ github.ref_name }} --jq .body \
+          | gh release edit "${{ github.ref_name }}" -F -
