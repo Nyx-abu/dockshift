@@ -1,33 +1,39 @@
 # ─────────────────────────────────────────────────────────────────────────
-#  IMPORTANT: this workflow belongs in the APP repo (Salah-XD/dockshift),
-#  not this web repo. Releases are cut from the app repo, so the
-#  `release` trigger only fires there.
+#  Redeploys the marketing site (dockshift-web on Vercel) whenever a new
+#  release is published from this repo.
 #
-#  To activate:
-#    1. Copy this file to  Salah-XD/dockshift/.github/workflows/
-#    2. Make sure that repo has a secret named  VERCEL_DEPLOY_HOOK
-#       (Settings → Secrets and variables → Actions)
-#    3. Commit & push → done. Next release will trigger a Vercel rebuild
-#       within ~5 seconds.
+#  Why `workflow_run` instead of `on: release`:
+#  ────────────────────────────────────────────
+#  Our `release.yml` workflow uses `electron-builder --publish always` with
+#  `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` to create the GitHub Release.
+#  GitHub explicitly suppresses workflow runs from events triggered by the
+#  default GITHUB_TOKEN — see "Using the GITHUB_TOKEN in a workflow" in
+#  GitHub's docs ("…events triggered by the GITHUB_TOKEN…will not create
+#  a new workflow run. This prevents you from accidentally creating
+#  recursive workflow runs").
 #
-#  Kept here as the source of truth so the deploy contract is visible
-#  from the web repo too.
+#  So `on: release` here would never fire for our actual release flow.
+#  Listening for the `Release` workflow itself to finish sidesteps the
+#  restriction and is the documented escape hatch for this case.
 # ─────────────────────────────────────────────────────────────────────────
 
 name: Redeploy web on release
 
 on:
+  # Catches automated releases: when release.yml finishes, this fires.
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  # Manual UI edits to a release are user actions (not GITHUB_TOKEN) so
+  # the `release` event works for them — kept so editing release notes
+  # or swapping an installer asset still refreshes the live site.
   release:
-    # `published` covers the normal flow (Draft → Publish, or "Publish
-    # release" directly). `released` fires only when a release moves out
-    # of pre-release state — covers the "publish a pre-release as stable"
-    # path. Together they catch every "this is now live for users" moment
-    # without firing on draft saves.
-    types: [published, released, edited]
+    types: [edited]
+  # Manual smoke-test trigger from the Actions tab → "Run workflow".
+  workflow_dispatch:
 
-# Cancel an in-flight rebuild if a second release event lands while the
-# first is still running — no point queueing two deploys that build the
-# same git ref. The second one wins.
+# Cancel an in-flight rebuild if a second trigger lands while the first
+# is still running — no point queueing two deploys.
 concurrency:
   group: vercel-redeploy
   cancel-in-progress: true
@@ -37,6 +43,11 @@ jobs:
     name: Trigger Vercel rebuild
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    # Skip when the upstream Release workflow failed — no point
+    # redeploying after a broken build. The other triggers (release
+    # edit, manual dispatch) always proceed because the condition
+    # short-circuits on `event_name != 'workflow_run'`.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: POST to Vercel deploy hook
         env:
@@ -50,8 +61,8 @@ jobs:
 
           # -f: fail on HTTP 4xx/5xx so a bad hook URL doesn't silently no-op.
           # -sS: quiet progress but keep error output.
-          # The hook returns JSON with the new deployment id; we log it so
-          # the Actions run links to the actual build.
+          # The hook returns JSON with the new deployment id; logged so
+          # the Actions run links to the actual Vercel build.
           response=$(curl -fsS -X POST "$HOOK_URL")
           echo "Vercel response: $response"
           echo "✓ Rebuild triggered — check https://vercel.com/dashboard for progress."
