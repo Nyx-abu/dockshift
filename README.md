@@ -38,6 +38,30 @@ more — always within reach, never in your way.
 
 <br/>
 
+---
+
+<div align="center">
+
+### 📁 Save your desktop. Restore in one click.
+
+<sub>Snapshot every open app, window, and layout — then put your full project back exactly where you left it.<br/>The one feature no other Windows tool ships out of the box.</sub>
+
+<br/><br/>
+
+<video src="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace-demo.mp4" controls muted autoplay loop playsinline width="92%" poster="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace.png">
+
+<a href="https://raw.githubusercontent.com/Salah-XD/dockshift/main/assets/workspace-demo.mp4">▶ Watch the workspace demo</a> · static preview ↓
+
+<img src="assets/workspace.png" alt="DockShift workspace snapshots panel" width="92%" />
+
+</video>
+
+</div>
+
+<br/>
+
+---
+
 ## 🤔 Why DockShift?
 
 You've got a clipboard manager, a launcher, a notes app, a terminal, an AI chat tab, and
@@ -68,25 +92,6 @@ in a click, model lists fetched live. One-tap quick actions act on whatever's in
 clipboard: *explain code · write tests · fix an error · add types.* Streaming replies,
 and keys are stored **encrypted by the OS keystore** — they never touch the renderer.
 
-</td>
-</tr>
-<tr>
-<td width="45%">
-
-### 📁 Workspace Snapshots
-
-Save your open apps and window layout as a named snapshot — then restore your **entire
-project context in one click.** Expand any snapshot to see exactly what it captured, real
-app icons and all. There's no built-in Windows equivalent.
-
-</td>
-<td width="55%">
-
-https://github.com/Salah-XD/dockshift/raw/main/assets/workspace-demo.mp4
-
-<sub><sup>Demo: save → close everything → restore in one click. Static preview ↓ if your viewer doesn't autoplay.</sup></sub>
-
-<img src="assets/workspace.png" alt="Workspace Snapshots panel" width="100%" />
 </td>
 </tr>
 <tr>
