@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.send(channel, data);
     }
   },
+  
   on: (channel, callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on(channel, handler);
