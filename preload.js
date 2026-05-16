@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'updater:check',
       'updater:install',
       'app:getVersion',
+      'app:openExternal',
       // Analytics (opt-in heartbeat)
       'analytics:setEnabled',
       'analytics:getStatus',

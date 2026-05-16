@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DockMenu from './components/DockMenu';
+import WelcomeModal from './components/WelcomeModal';
 import './styles/App.css';
 
 export default function App() {
@@ -10,6 +11,7 @@ export default function App() {
     activeTabId: null,
   });
   const [restoreAnim, setRestoreAnim] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   // Which screen edge the dock bar aligns to. Drives the data-dock-pos
   // attribute below; CSS does the actual alignment. Kept in sync with the
   // main process so changing it in Settings takes effect live.
@@ -55,14 +57,31 @@ export default function App() {
   }, [api]);
 
   // Track the dock position: load the saved value once, then follow live
-  // updates the main process pushes when it changes in Settings.
+  // updates the main process pushes when it changes in Settings. We also
+  // piggyback the first-run welcome detection here so the IPC fires once.
+  // Show welcome iff the settings file is empty AND has no completion flag —
+  // the empty-object check protects upgraders who already have other settings
+  // persisted but never saw a welcome.
   useEffect(() => {
     if (!api) return undefined;
     api.invoke?.('settings:get')
-      ?.then(s => { if (s?.dockPosition) setDockPos(s.dockPosition); })
+      ?.then(s => {
+        if (s?.dockPosition) setDockPos(s.dockPosition);
+        const isFresh = s && Object.keys(s).length === 0;
+        if (isFresh && !s.hasCompletedWelcome) setShowWelcome(true);
+      })
       ?.catch(() => {});
     return api.onDockPosition?.((pos) => { if (pos) setDockPos(pos); });
   }, [api]);
+
+  // While the welcome modal is open, the transparent overlay must not be
+  // click-through or the user can't click the modal's controls. DockMenu's
+  // own setMouseIgnore effect will reassert the natural state once the
+  // welcome closes and the user next interacts with the bar.
+  useEffect(() => {
+    if (!showWelcome || !api) return;
+    api.invoke?.('dock:setMouseIgnore', { ignore: false })?.catch(() => {});
+  }, [showWelcome, api]);
 
   // Hydrate the last-open panel from the persisted dock layout. Until this
   // resolves we keep `layoutHydrated.current` false so the save-effect below
@@ -101,6 +120,7 @@ export default function App() {
       }}
     >
       <DockMenu onAction={handleAction} activePanel={activePanel} />
+      <WelcomeModal isOpen={showWelcome} onComplete={() => setShowWelcome(false)} />
     </div>
   );
 }

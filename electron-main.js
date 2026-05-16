@@ -1077,7 +1077,18 @@ function applySettings(settings) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
   }
   if (typeof settings.launchOnStartup === 'boolean') {
-    app.setLoginItemSettings({ openAtLogin: settings.launchOnStartup });
+    // In dev, process.execPath is node_modules/electron/dist/electron.exe — registering
+    // that in the Run key launches the default Electron welcome window at boot. Only
+    // register for packaged builds, and pass an explicit path so the entry is unambiguous.
+    if (app.isPackaged) {
+      app.setLoginItemSettings({
+        openAtLogin: settings.launchOnStartup,
+        path: process.execPath,
+        args: []
+      });
+    } else if (settings.launchOnStartup) {
+      console.warn('[settings] launchOnStartup ignored in dev (would register node_modules electron.exe)');
+    }
   }
   if (settings.clipboardMaxItems != null) {
     getClipboardHistory().setMaxHistory(settings.clipboardMaxItems);
@@ -1344,6 +1355,20 @@ ipcMain.handle('terminal:openLink', (_e, { url }) => {
   }
 });
 
+// Generic external-link opener for in-app UI (Terms / Privacy links in the
+// welcome modal, etc). Same http/https guard as terminal:openLink — kept
+// separate so a renderer that only needs one capability doesn't get both.
+ipcMain.handle('app:openExternal', (_e, { url }) => {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false };
+    shell.openExternal(u.href);
+    return { ok: true };
+  } catch (_) {
+    return { ok: false };
+  }
+});
+
 // ─── Browser IPC ──────────────────────────────────────────────────────────────
 const bookmarksFile = () => path.join(app.getPath('userData'), 'browser-bookmarks.json');
 const browserHistFile = () => path.join(app.getPath('userData'), 'browser-history.json');
@@ -1429,10 +1454,18 @@ ipcMain.handle('settings:hotkey:set', (_e, { accelerator } = {}) => {
 let tray = null;
 
 function trayIconPath() {
-  // Bundled inside the asar in packaged builds (see package.json build.files).
-  // In dev __dirname resolves to the repo root so the same path works.
-  const ico = path.join(app.getAppPath(), 'assets', 'icon.ico');
-  return fs.existsSync(ico) ? ico : path.join(app.getAppPath(), 'assets', 'icon.png');
+  // Lookup chain, tray-first:
+  //   1. assets/tray-icon.png  — dedicated tray art: bold, edge-to-edge, no
+  //      frame. Best practice: ship a 32x32 (or 64x64) PNG sized for the
+  //      Windows tray slot. The app icon keeps its branded frame separately.
+  //   2. assets/icon.png       — 256x256 app icon as a fallback. Looks
+  //      framed in the tray but works.
+  //   3. assets/icon.ico       — last resort if the PNG is missing.
+  const tray = path.join(app.getAppPath(), 'assets', 'tray-icon.png');
+  if (fs.existsSync(tray)) return tray;
+  const png = path.join(app.getAppPath(), 'assets', 'icon.png');
+  if (fs.existsSync(png)) return png;
+  return path.join(app.getAppPath(), 'assets', 'icon.ico');
 }
 
 function formatAcceleratorForTray(accel) {
@@ -1474,7 +1507,11 @@ function createTray() {
     console.warn('[tray] icon not found at', trayIconPath());
     return;
   }
-  tray = new Tray(image);
+  // Resize to 32px from the loaded source. Windows still renders into its
+  // fixed tray slot, but giving Electron a 32x32 hint produces a sharper
+  // result on 125%/150% DPI than letting it use the bare 16x16.
+  const sized = image.resize({ width: 32, height: 32, quality: 'best' });
+  tray = new Tray(sized);
   tray.on('click', toggleWindowVisibility);
   refreshTrayMenu();
 }
