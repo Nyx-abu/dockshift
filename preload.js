@@ -77,6 +77,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'launcher:search',
       'launcher:open',
       'app:getIcon',
+      // Welcome / first-run
+      'welcome:complete',
       // Terminal
       'terminal:spawn',
       'terminal:ensure',

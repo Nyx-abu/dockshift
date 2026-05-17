@@ -495,6 +495,79 @@ function createWindow() {
   }
 }
 
+// ─── Welcome window ──────────────────────────────────────────────────────────
+// Standalone first-run window with a normal Windows chrome and a taskbar entry.
+// Lives as a separate BrowserWindow from the dock so it can have `frame: true`,
+// `skipTaskbar: false`, and `transparent: false` — the dock's overlay options
+// make it invisible to alt-tab and the taskbar, which is wrong for onboarding.
+// Same Vite bundle is reused via a `#welcome` hash that src/main.jsx routes on.
+let welcomeWindow = null;
+
+function createWelcomeWindow() {
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) {
+    welcomeWindow.focus();
+    return;
+  }
+  welcomeWindow = new BrowserWindow({
+    width: 720,
+    height: 520,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    minimizable: true,
+    center: true,
+    title: 'Welcome to DockShift',
+    icon: path.join(app.getAppPath(), 'assets', 'icon.ico'),
+    backgroundColor: '#101218',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+    show: false,
+  });
+
+  const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  const devPort = process.env.VITE_PORT || '5173';
+  const url = isDevelopment
+    ? `http://localhost:${devPort}/#welcome`
+    : `file://${path.join(__dirname, 'dist', 'index.html')}#welcome`;
+
+  welcomeWindow.loadURL(url);
+  welcomeWindow.once('ready-to-show', () => welcomeWindow?.show());
+
+  // Closing the welcome window before completing onboarding quits the app —
+  // we never want to land the user on the dock without them having seen the
+  // terms checkbox.
+  welcomeWindow.on('closed', () => {
+    const wasCompleted = !!readSettings().hasCompletedWelcome;
+    welcomeWindow = null;
+    if (!wasCompleted && !mainWindow) {
+      app.quit();
+    }
+  });
+}
+
+// Bring up the dock window, tray, and global shortcuts. Extracted so it can be
+// called either at startup (when welcome was already completed) or after the
+// user clicks "Get started" in the welcome window.
+function startDock() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    return;
+  }
+  createWindow();
+  createTray();
+
+  const saved = readSettings().toggleDockShortcut;
+  const r = registerToggleShortcut(saved || DEFAULT_TOGGLE_SHORTCUT);
+  if (!r.ok && saved) {
+    registerToggleShortcut(DEFAULT_TOGGLE_SHORTCUT);
+  }
+}
+
 // In-memory mirror of the persisted dock layout. The renderer pushes updates
 // here every time the user opens/closes a panel; we lazy-write them to disk
 // (debounced) and read them on startup. `getCurrentDockLayoutSnapshot()`
@@ -1109,6 +1182,28 @@ ipcMain.handle('settings:set', (_e, { settings }) => {
   return { ok: true };
 });
 
+// Onboarding finished — persist the user's first-run choices, apply them, then
+// hand off from the welcome window to the dock. Launch-on-startup is always
+// recorded as true (no toggle in the welcome anymore); analytics reflects the
+// switch the user actually saw.
+ipcMain.handle('welcome:complete', (_e, payload = {}) => {
+  const next = {
+    ...readSettings(),
+    hasCompletedWelcome: true,
+    launchOnStartup: true,
+    analyticsEnabled: !!payload.analyticsEnabled,
+  };
+  writeJsonAtomic(settingsFile(), next);
+  applySettings(next);
+
+  startDock();
+
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) {
+    welcomeWindow.close();
+  }
+  return { ok: true };
+});
+
 // ─── Launcher IPC ─────────────────────────────────────────────────────────────
 function getStartMenuPaths() {
   return [
@@ -1137,38 +1232,88 @@ function scanApps(dir, results = [], depth = 0) {
   return results;
 }
 
-let cachedApps = null;
+// Common user folders surfaced as launcher results. Uses Electron's built-in
+// path resolver so the locations come back correctly translated (e.g. localized
+// shell folder names, OneDrive-redirected Documents) instead of hard-coded
+// %USERPROFILE%\Documents strings.
+function scanFolders() {
+  const ids = ['home', 'desktop', 'documents', 'downloads', 'pictures', 'videos', 'music'];
+  const out = [];
+  for (const id of ids) {
+    try {
+      const p = app.getPath(id);
+      if (!p || !fs.existsSync(p)) continue;
+      out.push({
+        name: id === 'home' ? 'Home' : (path.basename(p) || id[0].toUpperCase() + id.slice(1)),
+        path: p,
+        type: 'folder',
+      });
+    } catch (_) { /* path id unsupported on this OS — skip */ }
+  }
+  return out;
+}
+
+const SYSTEM_COMMANDS = [
+  { name: 'Calculator', path: 'calc.exe', type: 'system' },
+  { name: 'Notepad', path: 'notepad.exe', type: 'system' },
+  { name: 'Task Manager', path: 'taskmgr.exe', type: 'system' },
+  { name: 'Control Panel', path: 'control.exe', type: 'system' },
+  { name: 'File Explorer', path: 'explorer.exe', type: 'system' },
+  { name: 'Command Prompt', path: 'cmd.exe', type: 'system' },
+  { name: 'PowerShell', path: 'powershell.exe', type: 'system' },
+  { name: 'Settings', path: 'ms-settings:', type: 'system' },
+];
+
+// Per-type result caps so a search like "do" doesn't return 20 apps and crowd
+// out matching folders. The renderer groups by type into sections, so balanced
+// representation matters more than a flat top-20.
+const LAUNCHER_TYPE_CAPS = { app: 8, folder: 6, system: 4, url: 4, file: 4 };
+const LAUNCHER_MAX_RESULTS = 20;
+
+let cachedItems = null;
 let cacheTime = 0;
 
 ipcMain.handle('launcher:search', (_e, { query }) => {
   // Refresh cache every 60s
-  if (!cachedApps || Date.now() - cacheTime > 60000) {
-    cachedApps = [];
-    for (const dir of getStartMenuPaths()) cachedApps = scanApps(dir, cachedApps);
-    // Add built-in system commands
-    cachedApps.push(
-      { name: 'Calculator', path: 'calc.exe', type: 'system' },
-      { name: 'Notepad', path: 'notepad.exe', type: 'system' },
-      { name: 'Task Manager', path: 'taskmgr.exe', type: 'system' },
-      { name: 'Control Panel', path: 'control.exe', type: 'system' },
-      { name: 'File Explorer', path: 'explorer.exe', type: 'system' },
-      { name: 'Command Prompt', path: 'cmd.exe', type: 'system' },
-      { name: 'PowerShell', path: 'powershell.exe', type: 'system' },
-      { name: 'Settings', path: 'ms-settings:', type: 'system' },
-    );
+  if (!cachedItems || Date.now() - cacheTime > 60000) {
+    cachedItems = [];
+    for (const dir of getStartMenuPaths()) cachedItems = scanApps(dir, cachedItems);
+    cachedItems.push(...SYSTEM_COMMANDS);
+    cachedItems.push(...scanFolders());
     cacheTime = Date.now();
   }
-  const q = query.toLowerCase();
-  return cachedApps
-    .filter(a => a.name.toLowerCase().includes(q))
-    .sort((a, b) => {
-      const aStartsWith = a.name.toLowerCase().startsWith(q);
-      const bStartsWith = b.name.toLowerCase().startsWith(q);
-      if (aStartsWith && !bStartsWith) return -1;
-      if (!aStartsWith && bStartsWith) return 1;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 20);
+  const q = (query || '').toLowerCase();
+  if (!q) return [];
+
+  // Lower score = better. Exact match wins, then prefix, then substring.
+  const scored = [];
+  for (const item of cachedItems) {
+    const name = item.name.toLowerCase();
+    if (!name.includes(q)) continue;
+    let score;
+    if (name === q) score = 0;
+    else if (name.startsWith(q)) score = 1;
+    else score = 2;
+    scored.push({ item, score });
+  }
+  scored.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    return a.item.name.localeCompare(b.item.name);
+  });
+
+  // Apply per-type caps while preserving global score order — so the single
+  // best match (regardless of type) stays at index 0 for the renderer's
+  // "Best Match" section.
+  const counts = {};
+  const out = [];
+  for (const { item } of scored) {
+    const t = item.type || 'file';
+    counts[t] = (counts[t] || 0) + 1;
+    if (counts[t] > (LAUNCHER_TYPE_CAPS[t] || 4)) continue;
+    out.push(item);
+    if (out.length >= LAUNCHER_MAX_RESULTS) break;
+  }
+  return out;
 });
 
 ipcMain.handle('launcher:open', async (_e, { path: appPath, type }) => {
@@ -1744,19 +1889,18 @@ ipcMain.handle('updater:install', () => {
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
 app.on('ready', () => {
-  createWindow();
-  createTray();
+  const settings = readSettings();
 
-  // Register the user's saved toggle shortcut, falling back to the default if
-  // it's missing or no longer valid (e.g. another app claimed it).
-  const saved = readSettings().toggleDockShortcut;
-  const r = registerToggleShortcut(saved || DEFAULT_TOGGLE_SHORTCUT);
-  if (!r.ok && saved) {
-    registerToggleShortcut(DEFAULT_TOGGLE_SHORTCUT);
-  }
-
+  // Auto-updater and heartbeat are dock-independent — start them either way so
+  // a user who's stuck on the welcome screen still gets background updates.
   setupAutoUpdater();
   startHeartbeatLoop();
+
+  if (settings.hasCompletedWelcome) {
+    startDock();
+  } else {
+    createWelcomeWindow();
+  }
 });
 
 app.on('window-all-closed', () => {

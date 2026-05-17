@@ -41,7 +41,7 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
   const [settings, setSettings] = useState({
     dockPosition: 'bottom-center',
     alwaysOnTop: true,
-    launchOnStartup: false,
+    launchOnStartup: true,
     clipboardMaxItems: 200,
     toggleDockShortcut: DEFAULT_TOGGLE_SHORTCUT,
     analyticsEnabled: false,
