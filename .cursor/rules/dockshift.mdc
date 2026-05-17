@@ -1,0 +1,17 @@
+---
+description: DockShift project rules — Electron + React/Vite floating dock for Windows
+alwaysApply: true
+---
+
+DockShift is a Windows-only Electron desktop app with a React/Vite renderer.
+
+**Read `AGENTS.md` at the repo root for full context.** It covers the main/preload/renderer process split, the three-place IPC rule (the #1 foot-gun in this codebase), persistence model, and security invariants. Everything below is Cursor-specific.
+
+## Cursor-specific reminders
+
+- **Vite alias `@` → `src/`** — use it in imports (`@/components/Foo`) instead of relative paths when crossing directories.
+- **Renderer changes hot-reload; main-process changes do NOT.** After editing `electron-main.js`, `preload.js`, `electron-persistence.js`, `electron-ai-providers.js`, `electron-secrets.js`, or anything under `src/workspace/`, you must restart Electron (kill `npm run dev` and re-run).
+- **Preload is CommonJS, everything else is ESM.** Don't suggest converting `preload.js` to `import` syntax — Electron's sandboxed preload requires CommonJS.
+- **No test/lint/format runner exists.** Do not suggest `npm test`, `npm run lint`, or `npm run format` — they will fail. If you generate code, the author tests it manually with `npm run dev`.
+- **Windows-only APIs are intentional.** `CF_HDROP` clipboard handling, PowerShell window tracking, `.ico` icons, NSIS installer — don't suggest "cross-platform" refactors unless the user explicitly asks.
+- **Panels follow a convention:** new feature panels live in `src/components/`, named `<Feature>Panel.jsx`, wrapped in `ResizablePanel`, and registered in `App.jsx`'s `activePanel` switch and `DockMenu.jsx`.
