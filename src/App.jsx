@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DockMenu from './components/DockMenu';
+import ScreenGlow from './components/ScreenGlow';
 import './styles/App.css';
 
 export default function App() {
@@ -138,6 +139,7 @@ export default function App() {
       }}
     >
       <DockMenu onAction={handleAction} activePanel={activePanel} />
+      <ScreenGlow />
     </div>
   );
 }
