@@ -27,11 +27,11 @@
   z-index: 99999;
   background: conic-gradient(
     from var(--glow-angle, 0deg) at 50% 50%,
-    rgba( 76,  29, 149, 1)   0deg,  /* purple-900 — deep base */
-    rgba(168,  85, 247, 1)  90deg,  /* purple-500 — vivid violet */
-    rgba(217,  70, 239, 1) 180deg,  /* fuchsia-500 — magenta accent */
-    rgba(124,  58, 237, 1) 270deg,  /* violet-600 — rich middle */
-    rgba( 76,  29, 149, 1) 360deg   /* back to deep base */
+    rgba( 26,  11,  61, 1)   0deg,  /* indigo-purple — deep anchor */
+    rgba(124,  58, 237, 1)  90deg,  /* violet-600 — vibrant mid */
+    rgba(217,  70, 239, 1) 180deg,  /* fuchsia-500 — bright peak */
+    rgba( 76,  29, 149, 1) 270deg,  /* purple-900 — alt deep anchor */
+    rgba( 26,  11,  61, 1) 360deg   /* loop back */
   );
   /* Rectangular frame mask. Solid for the first 4px at the very edge then
      gradient-feathered inward to fully transparent at 28px — gives a crisp,

@@ -46,7 +46,7 @@ const TYPE_COLORS = {
   file: 'var(--ds-warning)',
   link: 'var(--ds-success)',
   color: 'var(--ds-danger)',
-  code: '#b388ff',
+  code: 'var(--ds-accent-purple)',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
