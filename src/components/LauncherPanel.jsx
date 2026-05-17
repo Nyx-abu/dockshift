@@ -210,6 +210,7 @@ export default function LauncherPanel({ isOpen, onClose, anchorRect }) {
             setSelected={setSelected}
             launch={launch}
             icons={icons}
+            onIconError={(p) => setIcons((prev) => ({ ...prev, [p]: '' }))}
           />
         ))}
       </div>
@@ -229,7 +230,7 @@ export default function LauncherPanel({ isOpen, onClose, anchorRect }) {
   return ReactDOM.createPortal(panel, document.body);
 }
 
-function Section({ label, items, offset, selected, setSelected, launch, icons }) {
+function Section({ label, items, offset, selected, setSelected, launch, icons, onIconError }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       <div style={{
@@ -254,6 +255,7 @@ function Section({ label, items, offset, selected, setSelected, launch, icons })
             onHover={() => setSelected(globalIndex)}
             onClick={() => launch(item)}
             globalIndex={globalIndex}
+            onIconError={onIconError}
           />
         );
       })}
@@ -261,7 +263,7 @@ function Section({ label, items, offset, selected, setSelected, launch, icons })
   );
 }
 
-function ResultRow({ item, isSel, iconUrl, onHover, onClick, globalIndex }) {
+function ResultRow({ item, isSel, iconUrl, onHover, onClick, globalIndex, onIconError }) {
   const TypeIcon = TYPE_ICON[item.type] || FileIcon;
   const subtitle = SUBTITLE_BY_TYPE[item.type] || item.path;
   return (
@@ -295,7 +297,14 @@ function ResultRow({ item, isSel, iconUrl, onHover, onClick, globalIndex }) {
         color: isSel ? 'var(--ds-accent-light)' : 'var(--ds-text-muted)',
       }}>
         {iconUrl
-          ? <img src={iconUrl} alt="" width={18} height={18} style={{ display: 'block', borderRadius: 3 }} />
+          ? <img
+              src={iconUrl}
+              alt=""
+              width={18}
+              height={18}
+              onError={() => onIconError?.(item.path)}
+              style={{ display: 'block', borderRadius: 3 }}
+            />
           : <TypeIcon size={16} />}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>

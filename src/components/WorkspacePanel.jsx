@@ -176,7 +176,14 @@ function WorkspaceCard({ ws, loading, onRestore, onDelete }) {
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--ds-space-2)' }}>
                 <span style={{ color: 'var(--ds-text-faint)', display: 'inline-flex', marginTop: 1, flexShrink: 0 }}>
                   {realIcon
-                    ? <img src={realIcon} alt="" width={15} height={15} style={{ display: 'block', borderRadius: 3 }} />
+                    ? <img
+                        src={realIcon}
+                        alt=""
+                        width={15}
+                        height={15}
+                        onError={() => setIcons((prev) => ({ ...prev, [app.executablePath]: '' }))}
+                        style={{ display: 'block', borderRadius: 3 }}
+                      />
                     : <BoxIcon size={13} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>

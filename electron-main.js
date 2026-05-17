@@ -1525,8 +1525,28 @@ ipcMain.handle('app:getIcon', async (_e, { path: filePath } = {}) => {
   let url = '';
   try {
     if (fs.existsSync(filePath)) {
-      const img = await app.getFileIcon(filePath, { size: 'normal' });
-      if (img && !img.isEmpty()) url = img.toDataURL();
+      // For Start Menu shortcuts (.lnk), Windows hands back the generic
+      // shortcut overlay icon rather than the target program's icon. Resolve
+      // the shortcut to its target so we fetch the actual app icon (Adobe,
+      // VS Code, OpenCode, etc. all show up via Start Menu .lnk files).
+      let iconSource = filePath;
+      if (filePath.toLowerCase().endsWith('.lnk')) {
+        try {
+          const info = shell.readShortcutLink(filePath);
+          if (info && info.target && fs.existsSync(info.target)) {
+            iconSource = info.target;
+          }
+        } catch (_) { /* keep the .lnk as the source */ }
+      }
+      const img = await app.getFileIcon(iconSource, { size: 'large' });
+      if (img && !img.isEmpty()) {
+        // Windows sometimes returns a 1×1 placeholder for paths it can't
+        // resolve (UWP-virtualized exes, certain protected system paths).
+        // isEmpty() is false but the image is visually invisible — bail
+        // here so the renderer falls back to the line-icon.
+        const size = img.getSize();
+        if (size && size.width >= 8 && size.height >= 8) url = img.toDataURL();
+      }
     }
   } catch (_) { /* unresolvable — fall through to '' */ }
   iconCache.set(filePath, url);
