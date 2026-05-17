@@ -1722,17 +1722,52 @@ ipcMain.handle('browser:addHistory', (_e, { url, title }) => {
   return { ok: true };
 });
 
+// Animated opacity fade for the dock show/hide flow. setOpacity is instant,
+// so we step values in JS at ~60fps with a smoothstep ease for a natural
+// curve. Holds the active timer so a rapid toggle replaces the in-flight
+// fade instead of fighting it.
+let toggleFadeTimer = null;
+function fadeWindowOpacity(target, durationMs) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (toggleFadeTimer) {
+    clearInterval(toggleFadeTimer);
+    toggleFadeTimer = null;
+  }
+  const start = mainWindow.getOpacity();
+  if (start === target) return;
+  const startTime = Date.now();
+  toggleFadeTimer = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      clearInterval(toggleFadeTimer);
+      toggleFadeTimer = null;
+      return;
+    }
+    const elapsed = Date.now() - startTime;
+    const t = Math.min(1, elapsed / durationMs);
+    // Smoothstep: t² · (3 − 2t) — gentle S-curve, slow on both ends.
+    const eased = t * t * (3 - 2 * t);
+    mainWindow.setOpacity(start + (target - start) * eased);
+    if (t >= 1) {
+      clearInterval(toggleFadeTimer);
+      toggleFadeTimer = null;
+    }
+  }, 16);
+}
+
 function toggleWindowVisibility() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (isVisible) {
-    mainWindow.hide();
+    // Mouse-ignore flips to true immediately so the foreground app receives
+    // clicks even during the fade-out (otherwise a click landing on the
+    // half-faded dock would still be intercepted).
+    mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    fadeWindowOpacity(0, 180);
     isVisible = false;
   } else {
-    // showInactive() so triggering the global Ctrl+Shift+D from another app
-    // doesn't steal that app's keyboard focus — the dock just appears beside it.
-    mainWindow.showInactive();
-    // Re-assert hit-testing after show(): interactive only if a panel is open,
-    // otherwise click-through (the renderer re-syncs on the next mouse move).
+    // Restore hit-testing before starting the fade-in so the dock is
+    // interactive from the first frame the user can see it.
     mainWindow.setIgnoreMouseEvents(!isDockExpanded, { forward: true });
+    fadeWindowOpacity(1, 180);
     isVisible = true;
   }
   refreshTrayMenu();
