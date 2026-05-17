@@ -5,6 +5,8 @@ import { useTheme } from '../context/ThemeContext';
 import ResizablePanel from './ResizablePanel';
 import AiSettings from './AiSettings';
 import {
+  Badge,
+  Button,
   IconButton,
   Select,
   Switch,
@@ -152,6 +154,10 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
           />
         </SectionGroup>
 
+        <SectionGroup title="Windows Integration">
+          <ShellIntegrationRow api={api} />
+        </SectionGroup>
+
         <SectionGroup title="Shortcuts">
           <SettingRow
             label="Toggle dock"
@@ -180,4 +186,89 @@ export default function SettingsPanel({ isOpen, onClose, anchorRect }) {
   );
 
   return ReactDOM.createPortal(panel, document.body);
+}
+
+// Manages the "Open with DockShift Terminal / Save to DockShift Notes / Copy
+// path to DockShift Clipboard" Explorer right-click entries. Writes to HKCU
+// only (no admin needed). Install is gated on packaged builds — in dev mode,
+// the exe path would be node_modules\electron.exe which makes a useless target.
+function ShellIntegrationRow({ api }) {
+  const [status, setStatus] = useState({ loading: true });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const refresh = useCallback(() => {
+    api?.invoke?.('shell:integrationStatus')
+      ?.then((r) => setStatus({ loading: false, ...r }))
+      ?.catch(() => setStatus({ loading: false, ok: false }));
+  }, [api]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const onInstall = async () => {
+    setBusy(true); setError(null);
+    const r = await api?.invoke?.('shell:install');
+    setBusy(false);
+    if (!r?.ok) setError(r?.error || 'Install failed');
+    refresh();
+  };
+
+  const onUninstall = async () => {
+    setBusy(true); setError(null);
+    const r = await api?.invoke?.('shell:uninstall');
+    setBusy(false);
+    if (!r?.ok) setError(r?.error || 'Uninstall failed');
+    refresh();
+  };
+
+  // Not Windows → nothing to install.
+  if (!status.loading && status.platform !== 'win32') {
+    return (
+      <SettingRow
+        label="Right-click context menu"
+        description="Windows-only feature. The menu adds DockShift Terminal / Notes / Clipboard entries to File Explorer's right-click."
+        control={<Badge tone="neutral">Windows only</Badge>}
+      />
+    );
+  }
+
+  // Dev mode → explain why install is disabled.
+  if (!status.loading && status.devMode) {
+    return (
+      <SettingRow
+        label="Right-click context menu"
+        description="Available after installing DockShift via the NSIS installer — the dev exe path (node_modules\\electron.exe) would make the registry entry useless."
+        control={<Badge tone="neutral">Dev build</Badge>}
+      />
+    );
+  }
+
+  const installed = !!status.installed;
+
+  return (
+    <SettingRow
+      label="Right-click context menu"
+      description="Add DockShift Terminal / Notes / Clipboard entries to File Explorer's right-click menu. Per-user (HKCU); no admin needed."
+      control={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--ds-space-2)' }}>
+          <Badge tone={installed ? 'success' : 'neutral'}>{installed ? 'Installed' : 'Not installed'}</Badge>
+          {installed ? (
+            <Button variant="danger" size="sm" onClick={onUninstall} disabled={busy} loading={busy}>
+              Remove
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" onClick={onInstall} disabled={busy} loading={busy}>
+              Install
+            </Button>
+          )}
+        </div>
+      }
+    >
+      {error && (
+        <div style={{ fontSize: 'var(--ds-font-xs)', color: 'var(--ds-text-danger, #f87171)', paddingBottom: 'var(--ds-space-2)' }}>
+          {error}
+        </div>
+      )}
+    </SettingRow>
+  );
 }

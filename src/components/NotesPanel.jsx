@@ -167,7 +167,24 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
-    api.invoke('notes:list').then((list) => { setNotes(Array.isArray(list) ? list : []); setLoading(false); }).catch(() => setLoading(false));
+    api.invoke('notes:list').then((list) => {
+      const arr = Array.isArray(list) ? list : [];
+      setNotes(arr);
+      setLoading(false);
+      // If we were opened via the Explorer "Save to DockShift Notes" entry,
+      // App.jsx stashed the new note id on window — open that note for
+      // editing instead of dropping the user on the list view.
+      const pendingId = window.__dockshiftPendingNoteId;
+      if (pendingId) {
+        window.__dockshiftPendingNoteId = null;
+        const target = arr.find((n) => n.id === pendingId);
+        if (target) {
+          setEditNote(target);
+          setView('editor');
+          return;
+        }
+      }
+    }).catch(() => setLoading(false));
     setView('list');
     setEditNote(null);
     setShowColors(false);
@@ -399,6 +416,7 @@ export default function NotesPanel({ isOpen, onClose, anchorRect }) {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search notes…"
             icon={<SearchIcon size={14} />}
+            flat
           />
           <div style={SCROLL_AREA}>
             {loading && (

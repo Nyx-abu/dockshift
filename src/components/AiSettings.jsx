@@ -218,6 +218,7 @@ export default function AiSettings({ settings, update, api }) {
                 onChange={(e) => setKeyDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSaveKey(); }}
                 placeholder={`Paste your ${activeProvider?.label || ''} API key`}
+                flat
               />
               <Button
                 variant="primary"

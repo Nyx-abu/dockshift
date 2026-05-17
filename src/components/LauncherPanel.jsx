@@ -181,6 +181,7 @@ export default function LauncherPanel({ isOpen, onClose, anchorRect }) {
         onKeyDown={handleKeyDown}
         placeholder="Search apps, folders, commands…"
         icon={<SearchIcon size={14} />}
+        flat
       />
 
       <div

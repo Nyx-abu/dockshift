@@ -64,6 +64,43 @@ export default function App() {
     return api.onDockPosition?.((pos) => { if (pos) setDockPos(pos); });
   }, [api]);
 
+  // Non-activating-dock support: the BrowserWindow is created with
+  // `focusable: false` so dock-bar clicks never steal focus from the user's
+  // foreground app. When the user clicks a typing element (input/textarea/
+  // contenteditable/xterm), flip focusable→true so the natural click-focus
+  // flow lands the caret. Capture phase so we fire before React handlers.
+  useEffect(() => {
+    if (!api?.invoke) return undefined;
+    const TYPING_SELECTOR = 'input, textarea, [contenteditable="true"], .xterm, .xterm-helper-textarea';
+    const onMouseDown = (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest(TYPING_SELECTOR)) {
+        api.invoke('dock:activate').catch(() => {});
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown, true);
+    return () => document.removeEventListener('mousedown', onMouseDown, true);
+  }, [api]);
+
+  // Windows Explorer context-menu integration: main process pushes
+  // `shell:openPanel` after handling a `--shell-<kind>` launch (or a second
+  // instance fired from a right-click). Switch to the requested panel.
+  // Notes get an extra `noteId` so the panel can scroll the new note into view.
+  useEffect(() => {
+    if (!api?.on) return undefined;
+    const unsubscribe = api.on('shell:openPanel', (payload) => {
+      if (!payload || !payload.panel) return;
+      setActivePanel(payload.panel);
+      if (payload.panel === 'notes' && payload.noteId) {
+        // Stash for NotesPanel to pick up on its next render — read once.
+        window.__dockshiftPendingNoteId = payload.noteId;
+      }
+    });
+    // Tell main we're ready so it can drain any startup-time pending intent.
+    api.invoke?.('shell:rendererReady')?.catch?.(() => {});
+    return unsubscribe;
+  }, [api]);
+
   // Hydrate the last-open panel from the persisted dock layout. Until this
   // resolves we keep `layoutHydrated.current` false so the save-effect below
   // doesn't write a `null` activePanel over the user's saved one.

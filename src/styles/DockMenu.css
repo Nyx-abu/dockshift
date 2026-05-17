@@ -26,15 +26,9 @@
 .dock-container[data-dock-pos='bottom-right'] .dock-menu { justify-content: flex-end; }
 .dock-container[data-dock-pos='top-center'] .dock-menu { align-items: flex-start; }
 
-/* Panel open → the window is fullscreen. Dim the backdrop so the open panel is
-   the clear focus and the live desktop behind it isn't distracting. (Real OS
-   blur isn't achievable here — see the note in electron-main.js's
-   dock:setExpanded handler — so a solid scrim is the honest substitute.) Also
-   the click-outside-to-close target; see handleBackdropMouseDown in
-   DockMenu.jsx. */
-.dock-menu.panel-open {
-  background: rgba(8, 9, 12, 0.5);
-}
+/* Panel open → .dock-menu still fills the screen so handleBackdropMouseDown in
+   DockMenu.jsx can detect click-outside-to-close. No background paint though —
+   the user wants the live desktop to stay 100% visible behind an open panel. */
 
 /* ── Dock bar ──────────────────────────────────────────────────
    Positioned with `position: fixed` + inline left/top from DockMenu.jsx —

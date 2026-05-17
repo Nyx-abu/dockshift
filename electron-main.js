@@ -12,6 +12,7 @@ import { TerminalManager } from './src/workspace/TerminalManager.js';
 import { readJson, writeJsonAtomic, setCorruptionNotifier } from './electron-persistence.js';
 import { setSecret, getSecret, hasSecret, deleteSecret, listSecrets, isEncryptionAvailable } from './electron-secrets.js';
 import { PROVIDER_LIST, getProvider } from './electron-ai-providers.js';
+import { installShellIntegration, uninstallShellIntegration, isShellIntegrationInstalled, SHELL_INTEGRATION_VERSION } from './electron-shell-integration.js';
 // electron-updater is CommonJS — interop via the default import.
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
@@ -59,11 +60,131 @@ function loadEnv() {
 }
 loadEnv();
 
+// ─── Single-instance lock ─────────────────────────────────────────────────────
+// Required for the Windows shell-context-menu integration: when the user
+// right-clicks a folder in Explorer and picks "Open with DockShift Terminal",
+// Windows launches DockShift.exe again with `--shell-terminal "C:\..."` argv.
+// We don't want two DockShifts running — instead, the second launch hands its
+// argv to the first instance via the `second-instance` event below.
+const SINGLE_INSTANCE_LOCK = app.requestSingleInstanceLock();
+if (!SINGLE_INSTANCE_LOCK) {
+  // Another DockShift owns the lock. Quit immediately; the running instance
+  // will receive our argv through `second-instance` and act on it.
+  app.quit();
+}
+
+// Parse our custom `--shell-<kind> <path>` flags from a process argv array.
+// Returns { type: 'terminal'|'note'|'clipboard', path: '...' } or null.
+function parseShellArgs(argv) {
+  if (!Array.isArray(argv)) return null;
+  const flagIdx = argv.findIndex((a) => typeof a === 'string' && a.startsWith('--shell-'));
+  if (flagIdx === -1) return null;
+  const flag = argv[flagIdx];
+  const pathArg = argv[flagIdx + 1];
+  if (typeof pathArg !== 'string' || !pathArg) return null;
+  let type;
+  if (flag === '--shell-terminal') type = 'terminal';
+  else if (flag === '--shell-note') type = 'note';
+  else if (flag === '--shell-clipboard') type = 'clipboard';
+  else return null;
+  return { type, path: pathArg };
+}
+
+// Holds an intent parsed at first-launch (before mainWindow exists). The
+// renderer-ready handler picks it up once panels are mounted.
+let pendingShellIntent = parseShellArgs(process.argv);
+
 // ─── Clipboard History Manager ────────────────────────────────────────────────
 
 const HEX_COLOR_RE = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 const URL_RE = /^(https?:\/\/|ftp:\/\/|www\.)\S+/i;
 const MAX_HISTORY = 200;
+
+// "Is this code?" — scored heuristic. Each regex contributes 1 point on match
+// (some strong-signal regexes contribute 2). Total >= 2 → tagged as `code`.
+// Strong signals alone are enough to flip a snippet; weak signals need a
+// partner to avoid mis-tagging prose like "I like the function of this app".
+const CODE_SIGNALS = [
+  // ── JavaScript / TypeScript ──
+  { re: /\b(function|const|let|var|class|extends|import|export|return|typeof|instanceof)\b/, w: 1 },
+  { re: /\b(async|await|yield|new|delete|undefined|null)\b/, w: 1 },
+  { re: /=>\s*[{(]/, w: 2 },
+  { re: /\bconsole\.(log|warn|error|info|debug)\s*\(/, w: 2 },
+  { re: /\b(useState|useEffect|useMemo|useCallback|useRef)\s*\(/, w: 2 },
+
+  // ── Python ──
+  { re: /\b(def|elif|lambda|self|None|True|False|pass|yield|raise|with|as|nonlocal|global)\b/, w: 1 },
+  { re: /^\s*from\s+\S+\s+import\b/m, w: 2 },
+  { re: /^\s*import\s+\S+(\s+as\s+\S+)?\s*$/m, w: 1 },
+  { re: /\bprint\s*\(/, w: 1 },
+  { re: /:\s*$/m, w: 1 },
+
+  // ── Java / C# / C / C++ ──
+  { re: /\b(public|private|protected|static|void|int|String|float|double|long|short|boolean)\b/, w: 1 },
+  { re: /^\s*(#include|#define|using\s+namespace)/m, w: 2 },
+  { re: /\b(std::|namespace\s+\w+|template\s*<)/, w: 2 },
+
+  // ── Rust / Go ──
+  { re: /\b(fn|impl|trait|pub|mut|let\s+mut|match|enum|struct)\b/, w: 1 },
+  { re: /\b(func|package|defer|chan|goroutine|interface)\b/, w: 1 },
+  { re: /::\w+/, w: 1 },
+
+  // ── SQL ──
+  { re: /\b(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b/i, w: 1 },
+  { re: /\b(CREATE|ALTER|DROP|TABLE|INDEX|VIEW|DATABASE|SCHEMA)\s+(TABLE|INDEX|VIEW|IF\s+(NOT\s+)?EXISTS|\w+)/i, w: 2 },
+
+  // ── Shell ──
+  { re: /^\s*#!\s*\/(usr\/)?bin\//, w: 3 },
+  { re: /^\s*\$\s+\S+/m, w: 1 },
+  { re: /\b(echo|grep|awk|sed|curl|wget|chmod|chown|sudo|apt-get|brew|npm|yarn|pnpm|pip|cargo|docker|kubectl|git)\s+/, w: 1 },
+  { re: /\|\s*(grep|awk|sed|sort|uniq|head|tail|xargs|jq)\b/, w: 2 },
+
+  // ── HTML / JSX / XML ──
+  { re: /<\/?[a-zA-Z][\w-]*(\s+[\w-]+(=("[^"]*"|'[^']*'|\{[^}]*\}))?)*\s*\/?>/, w: 1 },
+  { re: /^\s*(<\?xml|<!DOCTYPE|<html|<script|<style|<svg|<head|<body)/i, w: 2 },
+  { re: /\bclassName\s*=\s*["{]/, w: 2 },
+
+  // ── CSS / SCSS ──
+  { re: /^\s*[.#&]?[\w-]+\s*\{[^}]*\}/m, w: 1 },
+  { re: /^\s*[\w-]+\s*:\s*[^;]+;/m, w: 1 },
+  { re: /@(media|keyframes|import|supports|font-face|tailwind|apply)\b/, w: 2 },
+  { re: /\b(rgb|rgba|hsl|hsla|var)\s*\(/, w: 1 },
+
+  // ── JSON / YAML / TOML ──
+  { re: /^\s*\{[\s\S]*"[^"]+"\s*:/m, w: 1 },
+  { re: /^\s*[\w-]+\s*:\s*(true|false|\d+|".*"|\[)/m, w: 1 },
+  { re: /^\s*\[[\w-]+(\.[\w-]+)*\]\s*$/m, w: 2 },
+
+  // ── Comments ──
+  { re: /^\s*\/\/[^\n]*/m, w: 1 },
+  { re: /\/\*[\s\S]*?\*\//, w: 1 },
+  { re: /^\s*#\s+\w+/m, w: 1 },
+  { re: /^\s*--\s+\w+/m, w: 1 },
+
+  // ── Markdown fenced code ──
+  { re: /```[\s\S]*```/, w: 3 },
+
+  // ── Control flow & generic code shapes ──
+  { re: /^\s*(if|for|while|switch|case|do|try|catch|finally|throw)\s*[({:]/m, w: 1 },
+  { re: /[{};]\s*$/m, w: 1 },
+  { re: /\b(true|false|null|nil)\b\s*[,;)\]}]/, w: 1 },
+  { re: /==|!=|===|!==|<=|>=|&&|\|\||::|=>|->|\?\?/, w: 1 },
+  { re: /^\s{2,}[^\s].*[{};:]\s*$/m, w: 1 }, // indented line ending with brace/semicolon/colon
+
+  // ── PHP / Ruby / Perl sigils ──
+  { re: /<\?php\b/, w: 3 },
+  { re: /\$\w+\s*=\s*/, w: 1 },
+  { re: /\b(end|require|require_relative|gem|attr_accessor)\b/, w: 1 },
+];
+
+function scoreCode(text) {
+  let score = 0;
+  for (const { re, w } of CODE_SIGNALS) {
+    if (re.test(text)) score += w;
+    if (score >= 3) return score;
+  }
+  return score;
+}
 
 /**
  * Build a Windows CF_HDROP clipboard buffer.
@@ -145,8 +266,10 @@ class ClipboardHistoryManager {
   }
 
   _detectType(text) {
-    if (HEX_COLOR_RE.test(text.trim())) return 'color';
-    if (URL_RE.test(text.trim())) return 'link';
+    const trimmed = text.trim();
+    if (HEX_COLOR_RE.test(trimmed)) return 'color';
+    if (URL_RE.test(trimmed)) return 'link';
+    if (trimmed.length >= 6 && scoreCode(trimmed) >= 2) return 'code';
     return 'text';
   }
 
@@ -444,6 +567,12 @@ function createWindow() {
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: true,
+    // Non-activating overlay: clicking the dock bar (or any non-typing area)
+    // must NOT pull focus from whatever the user is typing in. Typing panels
+    // (Launcher, Notes, Terminal, HotkeyRecorder…) flip focusable→true on
+    // demand via the `dock:activate` IPC; the blur handler resets it.
+    focusable: false,
+    acceptFirstMouse: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -463,14 +592,17 @@ function createWindow() {
   // Click-outside-to-close: when the window loses focus while a panel is open
   // (user clicked another app, the taskbar, alt-tabbed away), tell the renderer
   // to collapse. The renderer owns panel state and does the actual close.
+  // Also reset focusable→false so the next dock-bar click stays non-activating
+  // (it gets flipped back to true on demand by `dock:activate`).
   mainWindow.on('blur', () => {
-    if (isDockExpanded && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('dock:blurClose');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setFocusable(false);
+      if (isDockExpanded) mainWindow.webContents.send('dock:blurClose');
     }
   });
 
   mainWindow.loadURL(indexPath);
-  mainWindow.show();
+  mainWindow.showInactive();
 
   // Collapsed by default → the fullscreen overlay is click-through everywhere.
   // The renderer re-enables hit-testing over the dock bar via dock:setMouseIgnore.
@@ -712,6 +844,30 @@ ipcMain.handle('dock:setExpanded', (_event, { expanded }) => {
 ipcMain.handle('dock:setMouseIgnore', (_event, { ignore }) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
   mainWindow.setIgnoreMouseEvents(!!ignore, { forward: true });
+  return { ok: true };
+});
+
+// Activate / deactivate the dock window. The dock is created with
+// `focusable: false` so clicking the bar never steals focus from the user's
+// foreground app. When the user clicks INTO a typing element (input/textarea/
+// xterm), the renderer fires `dock:activate` to flip focusable→true and pull
+// focus to the webContents so the natural click-focus flow can land the caret
+// inside the input. The `blur` handler resets focusable→false automatically.
+ipcMain.handle('dock:activate', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+  mainWindow.setFocusable(true);
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+  // setFocusable(true) drops the WS_EX_TOOLWINDOW style on Windows, which
+  // makes the dock pop into the taskbar. Re-assert skipTaskbar so the icon
+  // stays out of view even while the window is activated for typing.
+  mainWindow.setSkipTaskbar(true);
+  return { ok: true };
+});
+
+ipcMain.handle('dock:deactivate', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+  mainWindow.setFocusable(false);
   return { ok: true };
 });
 
@@ -1410,7 +1566,7 @@ const TERMINAL_BANNER = [
 ].join('; ');
 
 /** Spawn a fresh pty, wire its data/exit, and make it the current session. */
-function spawnPty() {
+function spawnPty(cwdOverride) {
   const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
   const shellArgs = os.platform() === 'win32'
     ? ['-NoLogo', '-NoExit', '-Command', TERMINAL_BANNER]
@@ -1427,11 +1583,21 @@ function spawnPty() {
     }
   }
 
+  // Validate the cwd override before passing to PTY — node-pty inherits the
+  // parent process cwd on a non-existent path, which would silently land the
+  // shell somewhere unexpected.
+  let cwd = process.env.USERPROFILE || process.env.HOME || process.cwd();
+  if (cwdOverride && typeof cwdOverride === 'string') {
+    try {
+      if (fs.statSync(cwdOverride).isDirectory()) cwd = cwdOverride;
+    } catch { /* fall back to home */ }
+  }
+
   const proc = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
-    cwd: process.env.USERPROFILE || process.env.HOME || process.cwd(),
+    cwd,
     env: safeEnv,
   });
   ptyBuffer = '';
@@ -1541,7 +1707,9 @@ function toggleWindowVisibility() {
     mainWindow.hide();
     isVisible = false;
   } else {
-    mainWindow.show();
+    // showInactive() so triggering the global Ctrl+Shift+D from another app
+    // doesn't steal that app's keyboard focus — the dock just appears beside it.
+    mainWindow.showInactive();
     // Re-assert hit-testing after show(): interactive only if a panel is open,
     // otherwise click-through (the renderer re-syncs on the next mouse move).
     mainWindow.setIgnoreMouseEvents(!isDockExpanded, { forward: true });
@@ -1888,6 +2056,152 @@ ipcMain.handle('updater:install', () => {
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
+// Renderer is mounted and listening for `shell:openPanel` / `notify`. If we
+// were launched from the Explorer context menu (pendingShellIntent set at
+// startup), act on it now that the renderer can receive the dispatch.
+ipcMain.handle('shell:rendererReady', () => {
+  if (pendingShellIntent) {
+    const intent = pendingShellIntent;
+    pendingShellIntent = null;
+    handleShellIntent(intent);
+  }
+  return { ok: true };
+});
+
+// Windows Explorer context-menu integration — install/remove/probe. Install
+// writes the user's installed exe path into the registry; running in dev
+// (node_modules\electron.exe) would point Explorer at a useless target, so
+// the renderer should gate the toggle on `status.devMode === false`.
+ipcMain.handle('shell:integrationStatus', async () => {
+  const installed = await isShellIntegrationInstalled();
+  return {
+    ok: true,
+    platform: process.platform,
+    installed,
+    devMode: !app.isPackaged,
+    exePath: process.execPath,
+  };
+});
+
+ipcMain.handle('shell:install', async () => {
+  if (!app.isPackaged) {
+    return { ok: false, error: 'Available in installed builds only — the dev exe path would be invalid.' };
+  }
+  const r = await installShellIntegration(process.execPath);
+  if (r.ok) {
+    // Stamp the installed version so the on-ready refresh skips this user
+    // until the next entry-set change bumps SHELL_INTEGRATION_VERSION.
+    writeJsonAtomic(settingsFile(), { ...readSettings(), shellIntegrationVersion: SHELL_INTEGRATION_VERSION });
+  }
+  return r;
+});
+
+ipcMain.handle('shell:uninstall', async () => {
+  const r = await uninstallShellIntegration();
+  // Clear the stamp so a future Install click writes a fresh one rather
+  // than relying on a stale version recorded before the uninstall.
+  writeJsonAtomic(settingsFile(), { ...readSettings(), shellIntegrationVersion: 0 });
+  return r;
+});
+
+// On startup: if this user already opted into the menu in a prior version but
+// our entry set has moved forward since (new entry, renamed flag, changed
+// AppliesTo filter), silently re-install so auto-updates ship menu changes
+// without requiring a manual click in Settings. No-op for users who never
+// opted in (probe returns false) and for dev mode.
+async function maybeRefreshShellIntegration() {
+  if (!app.isPackaged || process.platform !== 'win32') return;
+  try {
+    const installed = await isShellIntegrationInstalled();
+    if (!installed) return; // never opted in — leave alone
+    const settings = readSettings();
+    const stored = Number(settings.shellIntegrationVersion) || 0;
+    if (stored >= SHELL_INTEGRATION_VERSION) return;
+    const r = await installShellIntegration(process.execPath);
+    if (r.ok) {
+      writeJsonAtomic(settingsFile(), { ...readSettings(), shellIntegrationVersion: SHELL_INTEGRATION_VERSION });
+    }
+  } catch { /* silent — this path isn't user-facing */ }
+}
+
+// When a second DockShift launch happens (Windows Explorer "Open with…"
+// context menu), hand its argv to the running instance and act on it here.
+app.on('second-instance', (_event, argv) => {
+  const intent = parseShellArgs(argv);
+  if (intent) handleShellIntent(intent);
+  // Surface the dock so the user actually sees something happen.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.showInactive();
+    mainWindow.setIgnoreMouseEvents(!isDockExpanded, { forward: true });
+  } else {
+    startDock();
+  }
+});
+
+// Act on a parsed shell intent. For 'terminal' we respawn the pty at the new
+// cwd and open the Terminal panel; for 'note' we create a note from the file
+// content and open the Notes panel; for 'clipboard' we push the path into the
+// history (no panel opened — silent, matches the "copy to clipboard" verb).
+function handleShellIntent(intent) {
+  if (!intent || !intent.path) return;
+  if (intent.type === 'terminal') {
+    let cwd = intent.path;
+    try {
+      const stat = fs.statSync(cwd);
+      if (!stat.isDirectory()) cwd = path.dirname(cwd);
+    } catch { return; }
+    // Kill the current shell so the new panel lands at the requested folder.
+    if (ptyProcess) { try { ptyProcess.kill(); } catch (_) {} ptyProcess = null; }
+    spawnPty(cwd);
+    sendToRenderer('shell:openPanel', { panel: 'terminal' });
+  } else if (intent.type === 'note') {
+    let raw = '';
+    try {
+      const stat = fs.statSync(intent.path);
+      if (!stat.isFile() || stat.size > 1_000_000) return; // 1MB cap
+      raw = fs.readFileSync(intent.path, 'utf8');
+    } catch { return; }
+    // NotesPanel's editor is contenteditable HTML — escape the file contents
+    // so file text containing tags renders as text, and turn newlines into
+    // <br> so paragraph structure is preserved.
+    const esc = raw
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/\r\n|\r|\n/g, '<br>');
+    const now = new Date().toISOString();
+    const note = {
+      id: crypto.randomUUID(),
+      title: path.basename(intent.path),
+      body: esc,
+      pinned: false,
+      fontSize: 13,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const notes = readNotes();
+    notes.unshift(note);
+    writeNotes(notes);
+    sendToRenderer('shell:openPanel', { panel: 'notes', noteId: note.id });
+  } else if (intent.type === 'clipboard') {
+    if (clipboardHistory && typeof clipboardHistory._push === 'function') {
+      clipboardHistory._push({
+        type: 'text',
+        content: intent.path,
+        preview: intent.path,
+      });
+    }
+    sendToRenderer('show-notification', { title: 'DockShift Clipboard', body: `Path copied: ${path.basename(intent.path)}` });
+  }
+}
+
+function sendToRenderer(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
 app.on('ready', () => {
   const settings = readSettings();
 
@@ -1896,11 +2210,19 @@ app.on('ready', () => {
   setupAutoUpdater();
   startHeartbeatLoop();
 
+  // Carry forward the user's Explorer context-menu state across auto-updates.
+  // No-op when the user never opted in or when the stamped version is current.
+  maybeRefreshShellIntegration();
+
   if (settings.hasCompletedWelcome) {
     startDock();
   } else {
     createWelcomeWindow();
   }
+
+  // If we were launched from the Explorer context menu, act on the intent
+  // once the renderer has had a chance to subscribe. The renderer signals
+  // readiness via `shell:rendererReady`; we drain `pendingShellIntent` then.
 });
 
 app.on('window-all-closed', () => {

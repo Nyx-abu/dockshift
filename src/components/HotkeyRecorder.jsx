@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Keys } from './ui';
+import { Keys, EditIcon } from './ui';
 
 // Electron accelerator format reference:
 // https://www.electronjs.org/docs/latest/api/accelerator
@@ -61,24 +61,8 @@ function acceleratorToKeyLabels(accel) {
   });
 }
 
-const buttonStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '4px 8px',
-  borderRadius: 'var(--ds-radius-sm)',
-  background: 'var(--ds-bg-control)',
-  border: '1px solid var(--ds-border-strong)',
-  color: 'var(--ds-text-secondary)',
-  fontSize: 'var(--ds-font-xs)',
-  cursor: 'pointer',
-  outline: 'none',
-};
-const recordingStyle = {
-  ...buttonStyle,
-  borderColor: 'var(--ds-accent, #7AA2F7)',
-  color: 'var(--ds-accent, #7AA2F7)',
-};
+// Styles live in ui.css under .ds-hotkey-recorder so :hover and :focus-visible
+// can be real CSS states (inline styles can't express those).
 
 export default function HotkeyRecorder({ value, defaultValue, onChange }) {
   const [recording, setRecording] = useState(false);
@@ -130,7 +114,7 @@ export default function HotkeyRecorder({ value, defaultValue, onChange }) {
           <button
             ref={buttonRef}
             type="button"
-            style={recordingStyle}
+            className="ds-hotkey-recorder ds-hotkey-recorder--recording"
             onClick={stopRecording}
             title="Press Esc to cancel"
           >
@@ -140,10 +124,21 @@ export default function HotkeyRecorder({ value, defaultValue, onChange }) {
           <button
             ref={buttonRef}
             type="button"
-            style={buttonStyle}
-            onClick={() => { setError(null); setRecording(true); }}
-            title="Click to record a new shortcut"
+            className="ds-hotkey-recorder"
+            onClick={() => {
+              // Dock is non-activating by default — request activation so the
+              // window.keydown capture below actually receives the user's
+              // chord. The button itself isn't a typing element, so the
+              // global App.jsx mousedown listener won't trigger this for us.
+              window.electronAPI?.invoke?.('dock:activate')?.catch?.(() => {});
+              setError(null);
+              setRecording(true);
+            }}
+            title="Click to edit shortcut"
           >
+            <span className="ds-hotkey-recorder__icon" aria-hidden="true">
+              <EditIcon size={11} />
+            </span>
             <Keys keys={labels} />
           </button>
         )}

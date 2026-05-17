@@ -10,17 +10,19 @@ import { forwardRef } from 'react';
  *   icon     optional leading icon node
  *   invalid  red border
  *   size     'sm' | 'md'                 (default 'md')
+ *   flat     skip the accent border on focus-within (stays neutral)
  *   wrapStyle style override for the shell
  *   ...rest  forwarded to <input> (value, onChange, type, placeholder…)
  */
 const Input = forwardRef(function Input(
-  { icon, invalid = false, size = 'md', wrapStyle, className = '', ...rest },
+  { icon, invalid = false, size = 'md', flat = false, wrapStyle, className = '', ...rest },
   ref
 ) {
   const cls = [
     'ds-input',
     `ds-input--${size}`,
     invalid ? 'ds-input--invalid' : '',
+    flat ? 'ds-input--flat' : '',
     className,
   ].filter(Boolean).join(' ');
 

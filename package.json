@@ -76,6 +76,7 @@
       "electron-ai-providers.js",
       "electron-persistence.js",
       "electron-secrets.js",
+      "electron-shell-integration.js",
       "preload.js",
       "src/workspace/**/*",
       "assets/icon.ico",
