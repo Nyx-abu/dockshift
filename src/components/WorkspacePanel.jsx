@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
 import SaveWorkspaceModal from './SaveWorkspaceModal';
+import ConfirmModal from './ConfirmModal';
 import { HEADER_STYLE, TITLE_STYLE } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
 import {
@@ -275,6 +276,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const api = useMemo(() => window.electronAPI, []);
 
@@ -415,7 +417,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
               ws={ws}
               loading={loading}
               onRestore={handleRestore}
-              onDelete={handleDelete}
+              onDelete={(name) => setPendingDelete(name)}
             />
           ))
         )}
@@ -430,6 +432,24 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
         isOpen={saveModalOpen}
         onSave={handleSave}
         onClose={() => setSaveModalOpen(false)}
+      />
+      <ConfirmModal
+        isOpen={!!pendingDelete}
+        title="Delete this workspace?"
+        message={pendingDelete && (
+          <>
+            <strong style={{ color: 'var(--ds-text-strong)' }}>{pendingDelete}</strong>
+            {' '}will be permanently removed. Open apps stay running; only the saved snapshot is deleted.
+          </>
+        )}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => {
+          const name = pendingDelete;
+          setPendingDelete(null);
+          await handleDelete(name);
+        }}
+        onClose={() => setPendingDelete(null)}
       />
     </>
   );

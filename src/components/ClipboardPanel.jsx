@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { HEADER_STYLE, TITLE_STYLE, SCROLL_AREA } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
+import ConfirmModal from './ConfirmModal';
 import {
   Button,
   IconButton,
@@ -355,6 +356,7 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
 
@@ -424,7 +426,7 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>Clipboard History</span>
         {items.length > 0 && (
-          <Button variant="danger" size="sm" onClick={handleClear}>Clear All</Button>
+          <Button variant="danger" size="sm" onClick={() => setConfirmClearOpen(true)}>Clear All</Button>
         )}
         <IconButton variant="danger" title="Close" onClick={onClose}>
           <XIcon size={14} />
@@ -498,6 +500,15 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
     <>
       {panel}
       {previewImage && <ImageOverlay src={previewImage} onClose={() => setPreviewImage(null)} />}
+      <ConfirmModal
+        isOpen={confirmClearOpen}
+        title="Clear all clipboard history?"
+        message={`This will delete all ${items.length} item${items.length === 1 ? '' : 's'} — including images and files. This can't be undone.`}
+        confirmLabel="Clear All"
+        variant="danger"
+        onConfirm={() => { handleClear(); setConfirmClearOpen(false); }}
+        onClose={() => setConfirmClearOpen(false)}
+      />
     </>,
     document.body
   );
