@@ -1,0 +1,25 @@
+# Windsurf rules — DockShift
+
+DockShift is a Windows-only Electron + React/Vite floating productivity dock.
+
+Read `AGENTS.md` at the repo root for canonical context (architecture, IPC rules, persistence, security invariants). The reminders below are the highest-value ones to keep in working memory.
+
+## Critical rules
+
+1. **IPC requires changes in three files.** A new channel needs `ipcMain.handle('ns:action', ...)` in `electron-main.js`, the string added to the `allowed` array in `preload.js`, and a `window.electronAPI.invoke(...)` call in a renderer component. Channels missing from the preload allowlist are silently dropped.
+
+2. **Main process vs renderer.** Renderer changes hot-reload via Vite. Edits to `electron-main.js`, `preload.js`, `electron-*.js`, or `src/workspace/**` require restarting Electron — they do not hot-reload.
+
+3. **Preload is CommonJS, everything else is ESM.** Don't convert `preload.js` to `import` syntax.
+
+4. **No test/lint/format runner exists.** Don't suggest `npm test`, `npm run lint`, etc. Testing is manual via `npm run dev`.
+
+5. **Security invariants:** Gemini API key stays in main process (never expose to renderer). `TerminalManager` validates cwd and rejects shell metacharacters — don't loosen it. `terminal:spawn` filters secret env vars — preserve the filter.
+
+6. **Windows-only is intentional.** Don't propose cross-platform refactors unless asked.
+
+## Conventions
+
+- Vite alias `@` → `src/`
+- Panels: `src/components/<Feature>Panel.jsx`, wrapped in `ResizablePanel`, registered in `App.jsx` + `DockMenu.jsx`
+- Per-feature JSON persistence in `app.getPath('userData')` — unlink blobs when deleting index entries
