@@ -252,17 +252,19 @@ export default function DockMenu({ onAction, activePanel }) {
   const handleClick = (item, e) => {
     if (PANEL_IDS.has(item.id)) {
       if (openPanel === item.id) {
-        // Toggle off
+        // Toggle off — drop both local and parent active state so the dock
+        // icon doesn't stay highlighted after the panel closes.
         setOpenPanel(null);
         api?.invoke?.('dock:setExpanded', { expanded: false });
+        onAction(null);
       } else {
         // Open this panel
         const rect = e.currentTarget.getBoundingClientRect();
         setAnchorRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height, bottom: rect.bottom, right: rect.right });
         setOpenPanel(item.id);
         api?.invoke?.('dock:setExpanded', { expanded: true });
+        onAction(item.action);
       }
-      onAction(item.action);
     } else {
       onAction(item.action);
     }
@@ -271,6 +273,9 @@ export default function DockMenu({ onAction, activePanel }) {
   const closePanel = () => {
     setOpenPanel(null);
     api?.invoke?.('dock:setExpanded', { expanded: false });
+    // Tell App.jsx the panel is no longer active so the dock-item highlight
+    // (which reads `activePanel`) clears alongside the closing panel.
+    onAction(null);
   };
 
   // Click-outside-to-close. When a panel is open the overlay is hit-testable
@@ -281,14 +286,17 @@ export default function DockMenu({ onAction, activePanel }) {
   };
 
   // The other half of click-outside: losing window focus (clicking another
-  // app, the taskbar, alt-tab). Main fires `dock:blurClose`; collapse on it.
+  // app, the taskbar, alt-tab). Main fires `dock:blurClose`; collapse on it
+  // and also clear the parent's activePanel so the dock-item highlight goes
+  // away (we don't want a "stuck active" icon while another app is focused).
   useEffect(() => {
     if (!api?.onDockBlur) return undefined;
     return api.onDockBlur(() => {
       setOpenPanel(null);
       api.invoke?.('dock:setExpanded', { expanded: false });
+      onAction(null);
     });
-  }, [api]);
+  }, [api, onAction]);
 
   // Flip tooltips below the icons when the bar sits near the top of the screen.
   const nearTop = barPos ? barPos.y < 120 : false;

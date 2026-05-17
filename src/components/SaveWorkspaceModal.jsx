@@ -122,6 +122,7 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
             placeholder="e.g. Deep Focus, Coding Session"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            flat
           />
         </div>
 
