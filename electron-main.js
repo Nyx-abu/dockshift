@@ -12,6 +12,14 @@ import { TerminalManager } from './src/workspace/TerminalManager.js';
 import { readJson, writeJsonAtomic, setCorruptionNotifier } from './electron-persistence.js';
 import { setSecret, getSecret, hasSecret, deleteSecret, listSecrets, isEncryptionAvailable } from './electron-secrets.js';
 import { PROVIDER_LIST, getProvider } from './electron-ai-providers.js';
+import {
+  TRANSCRIPTION_PROVIDER_LIST,
+  DEFAULT_TRANSCRIPTION_PROVIDER_ID,
+  getTranscriptionProvider,
+  runTranscription,
+  testTranscriptionProvider,
+  TranscriptionError,
+} from './electron-transcription-providers.js';
 // electron-updater is CommonJS — interop via the default import.
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
@@ -455,7 +463,7 @@ function createWindow() {
   });
 
   const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
-  const devPort = process.env.VITE_PORT || '5173';
+  const devPort = process.env.VITE_PORT || '5179';
   const indexPath = isDevelopment
     ? `http://localhost:${devPort}`
     : `file://${path.join(__dirname, 'dist', 'index.html')}`;
@@ -913,25 +921,146 @@ ipcMain.handle('ai:chatStream', async (e, { prompt }) => {
   return { streamId };
 });
 
-ipcMain.handle('ai:transcribe', async (_e, { audio, language }) => {
+// ─── Voice-to-Text (transcription) IPC ────────────────────────────────────────
+//
+// The Voice panel and Voice settings UI go through this namespace exclusively;
+// `ai:transcribe` is kept below as a backwards-compatible shim that resolves
+// the active STT provider the same way and returns the legacy `{ text }` shape.
+
+/**
+ * Resolve the API key for an STT provider:
+ *   1. encrypted secrets store (the canonical source)
+ *   2. shared Gemini key fallback when the user picked Gemini for STT but only
+ *      has the chat-side `gemini` key configured.
+ *   3. .env `VITE_GEMINI_API_KEY` (dev-time convenience, same as chat AI)
+ */
+function resolveSttApiKey(provider) {
+  if (!provider || provider.keyless) return '';
+  if (provider.keyName) {
+    const stored = getSecret(provider.keyName);
+    if (stored) return stored;
+  }
+  if (provider.id === 'gemini') {
+    const envKey = process.env.VITE_GEMINI_API_KEY;
+    if (envKey && envKey !== 'your_api_key_here') return envKey;
+  }
+  return null;
+}
+
+/** Pick the active STT provider object based on persisted settings. */
+function getActiveSttProvider() {
+  const settings = readSettings();
+  const id = settings.sttProvider || DEFAULT_TRANSCRIPTION_PROVIDER_ID;
+  return getTranscriptionProvider(id) || getTranscriptionProvider(DEFAULT_TRANSCRIPTION_PROVIDER_ID);
+}
+
+/** Endpoint override (per-provider) from settings.sttEndpoints. */
+function getSttEndpoint(providerId) {
+  const settings = readSettings();
+  const map = settings.sttEndpoints && typeof settings.sttEndpoints === 'object'
+    ? settings.sttEndpoints
+    : {};
+  const v = map[providerId];
+  return typeof v === 'string' && v.trim() ? v.trim() : '';
+}
+
+/** Catalog + per-provider readiness for the Voice settings UI. */
+ipcMain.handle('transcription:providers', () => {
+  const savedNames = new Set(listSecrets());
+  const activeId = readSettings().sttProvider || DEFAULT_TRANSCRIPTION_PROVIDER_ID;
+  const providers = TRANSCRIPTION_PROVIDER_LIST.map((p) => ({
+    ...p,
+    hasKey: p.keyless ? true : (p.keyName ? savedNames.has(p.keyName) : false),
+    endpoint: getSttEndpoint(p.id) || p.defaultEndpoint || '',
+  }));
+  return {
+    providers,
+    activeId,
+    encryptionAvailable: isEncryptionAvailable(),
+  };
+});
+
+/**
+ * Run a transcription with the (optionally overridden) active provider.
+ * `providerId` is accepted so the renderer can transcribe with a specific
+ * provider without persisting it — used by the "Test Connection" probe.
+ */
+ipcMain.handle('transcription:transcribe', async (_e, payload = {}) => {
+  const { audio, mimeType, language, providerId } = payload;
+  if (!audio) {
+    return { ok: false, error: 'No audio data received.', code: 'config' };
+  }
+  const provider = providerId
+    ? (getTranscriptionProvider(providerId) || getActiveSttProvider())
+    : getActiveSttProvider();
+  if (!provider) {
+    return { ok: false, error: 'No transcription provider configured.', code: 'config' };
+  }
   try {
-    // Prefer the active provider if it can transcribe; otherwise fall back to
-    // any configured provider that can (Gemini or OpenAI).
-    const { provider: active } = getActiveProvider();
-    let provider = active.canTranscribe && providerReady(active) ? active : null;
-    if (!provider) {
-      provider = [getProvider('gemini'), getProvider('openai')]
-        .find(p => p && p.canTranscribe && providerReady(p)) || null;
-    }
-    if (!provider) {
-      throw new Error('No transcription-capable provider configured (needs Gemini or OpenAI).');
-    }
-    const text = await provider.transcribe({
-      apiKey: resolveApiKey(provider),
+    const result = await runTranscription({
+      provider,
+      apiKey: resolveSttApiKey(provider),
+      endpoint: getSttEndpoint(provider.id),
       audioBase64: audio,
-      language: language || 'en',
+      mimeType: mimeType || 'audio/webm',
+      language: language ?? null,
     });
-    return { text: text || '' };
+    return {
+      ok: true,
+      text: result.text,
+      detectedLanguage: result.detectedLanguage,
+      durationMs: result.durationMs,
+      provider: result.provider,
+      providerLabel: provider.label,
+    };
+  } catch (err) {
+    const code = err instanceof TranscriptionError ? err.code : 'unknown';
+    console.warn('[transcription:transcribe]', provider.id, code, err.message);
+    return { ok: false, error: err.message || 'Transcription failed.', code, provider: provider.id };
+  }
+});
+
+/**
+ * Test a provider's credentials + endpoint without performing a real
+ * transcription. The renderer passes the providerId because the user may be
+ * testing a provider they haven't yet activated.
+ */
+ipcMain.handle('transcription:test', async (_e, { providerId } = {}) => {
+  const provider = getTranscriptionProvider(providerId) || getActiveSttProvider();
+  if (!provider) return { ok: false, error: 'Unknown provider.', code: 'config' };
+  try {
+    const out = await testTranscriptionProvider({
+      provider,
+      apiKey: resolveSttApiKey(provider),
+      endpoint: getSttEndpoint(provider.id),
+    });
+    return { ok: true, info: out?.info || 'Connection successful.', provider: provider.id };
+  } catch (err) {
+    const code = err instanceof TranscriptionError ? err.code : 'unknown';
+    return { ok: false, error: err.message || 'Connection failed.', code, provider: provider.id };
+  }
+});
+
+/**
+ * Backwards-compatible shim. The old `ai:transcribe` channel used Gemini /
+ * OpenAI directly from `electron-ai-providers.js`; we now route it through the
+ * STT executor so anything that still calls it (or third-party plugins) keeps
+ * working but benefits from provider switching and auto-detect.
+ */
+ipcMain.handle('ai:transcribe', async (_e, { audio, language } = {}) => {
+  if (!audio) throw new Error('Transcription failed: no audio');
+  const provider = getActiveSttProvider();
+  if (!provider) throw new Error('Transcription failed: no provider configured');
+  try {
+    const result = await runTranscription({
+      provider,
+      apiKey: resolveSttApiKey(provider),
+      endpoint: getSttEndpoint(provider.id),
+      audioBase64: audio,
+      mimeType: 'audio/webm',
+      language: language || null,
+    });
+    return { text: result.text || '' };
   } catch (err) {
     console.error('[AI:Transcribe] Error:', err.message);
     throw new Error('Transcription failed: ' + (err.message || 'Unknown error'));
@@ -1742,6 +1871,13 @@ ipcMain.handle('updater:install', () => {
 });
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
+
+app.on('web-contents-created', (event, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+});
 
 app.on('ready', () => {
   createWindow();

@@ -2,10 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { HEADER_STYLE, TITLE_STYLE } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
-import { Button, IconButton, Select, Callout, XIcon, MicIcon, StopIcon } from './ui';
+import { Button, IconButton, Select, Callout, Badge, XIcon, MicIcon, StopIcon } from './ui';
 import '../styles/panels.css';
 
+/**
+ * Curated language list shown in the top selector. The first entry — 'auto' —
+ * means "let the provider detect the spoken language", and is only enabled
+ * when the active STT provider advertises `capabilities.autoDetectLanguage`.
+ *
+ * The values are BCP-47 tags; the main process normalizes them to whatever
+ * shape each provider expects (e.g. trims to ISO-639-1 for Whisper).
+ */
 const LANGUAGES = [
+  { value: 'auto', label: 'Auto Detect' },
   { value: 'en-US', label: 'English (US)' },
   { value: 'en-GB', label: 'English (UK)' },
   { value: 'hi-IN', label: 'Hindi' },
@@ -17,85 +26,204 @@ const LANGUAGES = [
   { value: 'zh-CN', label: 'Chinese' },
   { value: 'ar-SA', label: 'Arabic' },
   { value: 'pt-BR', label: 'Portuguese (BR)' },
+  { value: 'ru-RU', label: 'Russian' },
+  { value: 'it-IT', label: 'Italian' },
 ];
 
+/** MIME type the renderer records in. Kept in sync with what providers accept. */
+const RECORDER_MIME = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+  ? 'audio/webm;codecs=opus'
+  : 'audio/webm';
+
+/**
+ * Convert a Blob to base64 (without the data: prefix). Uses FileReader so the
+ * heavy lifting stays off the main thread for large clips.
+ */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || '');
+      const i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function VoicePanel({ isOpen, onClose, anchorRect }) {
+  const api = useMemo(() => window.electronAPI, []);
+
+  // ── Recording / transcription state ────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [language, setLanguage] = useState('en-US');
+  const [language, setLanguage] = useState('auto');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const panelRef = useRef(null);
-  const scrollRef = useRef(null);
-  const api = useMemo(() => window.electronAPI, []);
+  const [detectedLanguage, setDetectedLanguage] = useState(null);
 
-  // Stop recording when panel closes
+  // ── Provider catalog (capabilities, label) ─────────────────────────────────
+  const [providers, setProviders] = useState([]);
+  const [activeProviderId, setActiveProviderId] = useState('');
+
+  // ── Refs for live recording (don't trigger re-renders) ─────────────────────
+  const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  // Snapshot of the language at recording-start time. Mutating the selector
+  // mid-recording must NOT change which language hint is sent for the
+  // already-captured audio — this ref freezes it.
+  const recordingLanguageRef = useRef('auto');
+  const scrollRef = useRef(null);
+
+  const activeProvider = useMemo(
+    () => providers.find((p) => p.id === activeProviderId) || null,
+    [providers, activeProviderId]
+  );
+  const supportsAutoDetect = activeProvider
+    ? !!activeProvider.capabilities?.autoDetectLanguage
+    : true; // assume yes until catalog loads, so the UI doesn't flicker
+
+  // Catalog + persisted language preference. Reload on every panel open so
+  // changes made in Settings (provider switch, key added) take effect without
+  // re-mounting the panel.
   useEffect(() => {
-    if (!isOpen && mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    if (!isOpen || !api) return;
+    let cancelled = false;
+    api.invoke('transcription:providers').then((res) => {
+      if (cancelled) return;
+      setProviders(Array.isArray(res?.providers) ? res.providers : []);
+      setActiveProviderId(res?.activeId || '');
+    }).catch(() => {});
+    api.invoke('settings:get').then((s) => {
+      if (cancelled || !s) return;
+      if (typeof s.sttLanguage === 'string' && s.sttLanguage) {
+        setLanguage(s.sttLanguage);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, api]);
+
+  // When the catalog reveals the active provider can't auto-detect, fall back
+  // to a safe default — but only if the user has 'auto' selected. We never
+  // silently overwrite a manual choice the user actually made.
+  useEffect(() => {
+    if (activeProvider && !supportsAutoDetect && language === 'auto') {
+      setLanguage('en-US');
+    }
+  }, [activeProvider, supportsAutoDetect, language]);
+
+  // Persist the user's language choice. Excluded from the recording-start
+  // capture above so an in-flight transcription is unaffected. Defensively
+  // rejects 'auto' for providers that don't support it (Select can't render
+  // per-option disabled, so we enforce here instead).
+  const handleLanguageChange = useCallback((value) => {
+    const next = (value === 'auto' && !supportsAutoDetect) ? 'en-US' : value;
+    setLanguage(next);
+    api?.invoke?.('settings:set', { settings: { sttLanguage: next } })?.catch(() => {});
+  }, [api, supportsAutoDetect]);
+
+  // Stop a live recording when the panel closes — releases the mic and avoids
+  // a transcription firing after the user dismissed the panel.
+  useEffect(() => {
+    if (isOpen) return;
+    if (mediaRecorderRef.current && isRecording) {
+      try { mediaRecorderRef.current.stop(); } catch (_) {}
       setIsRecording(false);
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
   }, [isOpen, isRecording]);
 
+  // Cleanup on unmount: belt-and-braces release of the mic stream.
+  useEffect(() => () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current?.stop(); } catch (_) {}
       setIsRecording(false);
       return;
     }
 
     setError(null);
+    setDetectedLanguage(null);
+
+    let stream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (_) {
+      setError('Microphone access denied or not supported.');
+      return;
+    }
+
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: RECORDER_MIME });
+    } catch (err) {
+      stream.getTracks().forEach((t) => t.stop());
+      setError(`Could not start recorder: ${err.message}`);
+      return;
+    }
+
+    chunksRef.current = [];
+    recordingLanguageRef.current = language;
+    streamRef.current = stream;
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      // Release the mic immediately so the OS indicator clears even if the
+      // transcription request hangs.
+      stream.getTracks().forEach((t) => t.stop());
+      if (streamRef.current === stream) streamRef.current = null;
+
+      if (chunksRef.current.length === 0) return;
+      const blob = new Blob(chunksRef.current, { type: RECORDER_MIME });
       chunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        // Stop all tracks to release microphone
-        stream.getTracks().forEach((track) => track.stop());
-
-        if (chunksRef.current.length === 0) return;
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        chunksRef.current = [];
-
-        setIsTranscribing(true);
-        try {
-          // Convert blob to base64 and send to main process for transcription
-          const reader = new FileReader();
-          const base64Promise = new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-          });
-          reader.readAsDataURL(blob);
-          const base64Audio = await base64Promise;
-
-          const result = await api.invoke('ai:transcribe', {
-            audio: base64Audio,
-            language: language.split('-')[0],
-          });
-
-          if (result?.text) {
-            setTranscript((prev) => prev + (prev ? ' ' : '') + result.text);
-          }
-        } catch (err) {
-          setError(err.message || 'Transcription failed');
-        } finally {
-          setIsTranscribing(false);
+      setIsTranscribing(true);
+      try {
+        const base64Audio = await blobToBase64(blob);
+        // language: 'auto' (or null) → main process omits the param so the
+        // provider auto-detects. The captured value comes from the ref so a
+        // mid-recording UI change can't poison the request.
+        const lang = recordingLanguageRef.current;
+        const result = await api.invoke('transcription:transcribe', {
+          audio: base64Audio,
+          mimeType: blob.type || RECORDER_MIME,
+          language: lang === 'auto' ? null : lang,
+        });
+        if (!result?.ok) {
+          setError(result?.error || 'Transcription failed.');
+        } else if (result.text) {
+          setTranscript((prev) => prev + (prev ? ' ' : '') + result.text);
+          if (result.detectedLanguage) setDetectedLanguage(result.detectedLanguage);
         }
-      };
+      } catch (err) {
+        setError(err?.message || 'Transcription failed.');
+      } finally {
+        setIsTranscribing(false);
+      }
+    };
 
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+    try {
+      recorder.start();
       setIsRecording(true);
     } catch (err) {
-      setError('Microphone access denied or not supported');
+      stream.getTracks().forEach((t) => t.stop());
+      setError(`Could not start recording: ${err.message}`);
     }
   }, [isRecording, language, api]);
 
@@ -109,14 +237,23 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
   const handleClear = useCallback(() => {
     setTranscript('');
     setError(null);
+    setDetectedLanguage(null);
   }, []);
 
-  // Auto-scroll
+  // Auto-scroll the transcript area as new text arrives.
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [transcript, isTranscribing]);
 
   if (!isOpen || !anchorRect) return null;
+
+  // Build the language option list — disabling 'auto' for providers that don't
+  // support it preserves the UI affordance while preventing invalid requests.
+  const languageOptions = LANGUAGES.map((opt) =>
+    opt.value === 'auto' && !supportsAutoDetect
+      ? { ...opt, label: `${opt.label} (unsupported)`, disabled: true }
+      : opt
+  );
 
   const panel = (
     <ResizablePanel isOpen={isOpen} dockAction="mic">
@@ -125,18 +262,51 @@ export default function VoicePanel({ isOpen, onClose, anchorRect }) {
         <span style={TITLE_STYLE}>Voice to Text</span>
         <Select
           value={language}
-          onChange={setLanguage}
-          options={LANGUAGES}
+          onChange={handleLanguageChange}
+          options={languageOptions}
           searchable
           size="sm"
-          style={{ width: 150 }}
+          style={{ width: 160 }}
         />
         <IconButton variant="danger" title="Close" onClick={onClose}>
           <XIcon size={14} />
         </IconButton>
       </div>
 
-      {/* Record Button */}
+      {/* Provider hint row — shows active provider + detected language when present.
+          Kept lightweight so it never crowds the recording control. */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 'var(--ds-space-2)',
+        flexWrap: 'wrap',
+        fontSize: 'var(--ds-font-xs)',
+        color: 'var(--ds-text-dim)',
+        flexShrink: 0,
+      }}>
+        {activeProvider && (
+          <Badge tone="neutral" title="Configured in Settings → Voice to Text">
+            {activeProvider.label}
+          </Badge>
+        )}
+        {language === 'auto' && supportsAutoDetect && (
+          <Badge tone="accent">Auto-detect on</Badge>
+        )}
+        {detectedLanguage && language === 'auto' && (
+          <Badge tone="success">Detected: {detectedLanguage}</Badge>
+        )}
+      </div>
+
+      {/* Capability warning — only shown when the user picked 'auto' against a
+          provider that doesn't support it (rare, since we auto-fallback above). */}
+      {!supportsAutoDetect && language === 'auto' && (
+        <Callout tone="warning">
+          {activeProvider?.label || 'This provider'} doesn't support auto-detection — pick a language.
+        </Callout>
+      )}
+
+      {/* Record button */}
       <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--ds-space-3) 0' }}>
         <button
           onClick={toggleRecording}
