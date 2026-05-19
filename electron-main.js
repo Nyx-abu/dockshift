@@ -12,7 +12,6 @@ import { TerminalManager } from './src/workspace/TerminalManager.js';
 import { readJson, writeJsonAtomic, setCorruptionNotifier } from './electron-persistence.js';
 import { setSecret, getSecret, hasSecret, deleteSecret, listSecrets, isEncryptionAvailable } from './electron-secrets.js';
 import { PROVIDER_LIST, getProvider } from './electron-ai-providers.js';
-<<<<<<< HEAD
 import {
   TRANSCRIPTION_PROVIDER_LIST,
   DEFAULT_TRANSCRIPTION_PROVIDER_ID,
@@ -21,9 +20,7 @@ import {
   testTranscriptionProvider,
   TranscriptionError,
 } from './electron-transcription-providers.js';
-=======
 import { installShellIntegration, uninstallShellIntegration, isShellIntegrationInstalled, SHELL_INTEGRATION_VERSION } from './electron-shell-integration.js';
->>>>>>> e3364de3260de43b463e3528f45f8e6880e93477
 // electron-updater is CommonJS — interop via the default import.
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
@@ -673,7 +670,7 @@ function createWelcomeWindow() {
   });
 
   const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
-  const devPort = process.env.VITE_PORT || '5173';
+  const devPort = process.env.VITE_PORT || '5179';
   const url = isDevelopment
     ? `http://localhost:${devPort}/#welcome`
     : `file://${path.join(__dirname, 'dist', 'index.html')}#welcome`;
@@ -2243,7 +2240,6 @@ ipcMain.handle('updater:install', () => {
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
-<<<<<<< HEAD
 app.on('web-contents-created', (event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -2251,17 +2247,6 @@ app.on('web-contents-created', (event, contents) => {
   });
 });
 
-app.on('ready', () => {
-  createWindow();
-  createTray();
-
-  // Register the user's saved toggle shortcut, falling back to the default if
-  // it's missing or no longer valid (e.g. another app claimed it).
-  const saved = readSettings().toggleDockShortcut;
-  const r = registerToggleShortcut(saved || DEFAULT_TOGGLE_SHORTCUT);
-  if (!r.ok && saved) {
-    registerToggleShortcut(DEFAULT_TOGGLE_SHORTCUT);
-=======
 // Renderer is mounted and listening for `shell:openPanel` / `notify`. If we
 // were launched from the Explorer context menu (pendingShellIntent set at
 // startup), act on it now that the renderer can receive the dispatch.
@@ -2270,7 +2255,6 @@ ipcMain.handle('shell:rendererReady', () => {
     const intent = pendingShellIntent;
     pendingShellIntent = null;
     handleShellIntent(intent);
->>>>>>> e3364de3260de43b463e3528f45f8e6880e93477
   }
   return { ok: true };
 });
