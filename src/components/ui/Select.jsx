@@ -115,9 +115,12 @@ export default function Select({
     const r = el.getBoundingClientRect();
     const spaceBelow = window.innerHeight - r.bottom;
     const placeAbove = spaceBelow < POPOVER_MAX && r.top > spaceBelow;
+    // Anchor the popover's right edge to the trigger's right edge so the
+    // popover and trigger right-align (the chevron points at it). Width is
+    // left to the content — no min-width is forced from the trigger size,
+    // so short options like "50/100/200" don't produce a wide empty band.
     setPos({
-      left: r.left,
-      width: r.width,
+      right: Math.round(window.innerWidth - r.right),
       top: placeAbove ? undefined : Math.round(r.bottom + 4),
       bottom: placeAbove ? Math.round(window.innerHeight - r.top + 4) : undefined,
     });
@@ -268,8 +271,7 @@ export default function Select({
             ref={popoverRef}
             className="ds-select__popover"
             style={{
-              left: pos.left,
-              width: pos.width,
+              right: pos.right,
               top: pos.top,
               bottom: pos.bottom,
             }}

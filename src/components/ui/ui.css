@@ -160,6 +160,8 @@
 .ds-input--md { height: 30px; }
 .ds-input--sm { height: 26px; }
 .ds-input:focus-within { border-color: var(--ds-accent-border); }
+.ds-input--flat:focus-within { border-color: var(--ds-border); }
+.ds-input--flat .ds-input__field:focus-visible { box-shadow: none; }
 .ds-input--invalid { border-color: var(--ds-danger-border); }
 .ds-input__icon {
   display: inline-flex;
@@ -529,3 +531,42 @@
   color: var(--ds-text-secondary);
 }
 .ds-kbd-sep { color: var(--ds-text-dim); font-size: var(--ds-font-xs); margin: 0 1px; }
+
+/* ── HotkeyRecorder ──────────────────────────────────────────── */
+.ds-hotkey-recorder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-bg-control);
+  border: 1px solid var(--ds-border-strong);
+  color: var(--ds-text-secondary);
+  font-family: inherit;
+  font-size: var(--ds-font-xs);
+  cursor: pointer;
+  outline: none;
+  transition: background var(--ds-dur-fast) var(--ds-ease),
+              border-color var(--ds-dur-fast) var(--ds-ease),
+              color var(--ds-dur-fast) var(--ds-ease);
+}
+.ds-hotkey-recorder:hover {
+  background: var(--ds-bg-control-hover, rgba(255, 255, 255, 0.09));
+  border-color: var(--ds-accent-border);
+  color: var(--ds-text-primary);
+}
+.ds-hotkey-recorder:focus-visible {
+  outline: 2px solid var(--ds-accent-border);
+  outline-offset: 1px;
+}
+.ds-hotkey-recorder__icon {
+  display: inline-flex;
+  color: var(--ds-text-faint);
+}
+.ds-hotkey-recorder:hover .ds-hotkey-recorder__icon { color: var(--ds-accent-light); }
+.ds-hotkey-recorder--recording,
+.ds-hotkey-recorder--recording:hover {
+  border-color: var(--ds-accent, #7AA2F7);
+  color: var(--ds-accent, #7AA2F7);
+  background: var(--ds-bg-control);
+}

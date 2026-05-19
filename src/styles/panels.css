@@ -3,6 +3,116 @@
    Panel animations and WYSIWYG editor styles
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Screen-edge glow (Copilot/Siri style) ────────────────────
+   Continuous multicolor ribbon glow that wraps the entire viewport border.
+   Fires on workspace save (and other future "DockShift did something"
+   moments). Two-layer mask carves a frame shape out of a conic gradient so
+   the colors flow around the perimeter; a rotating @property --glow-angle
+   actually animates the flow during the 900ms life. blur() softens the
+   inner falloff so the desktop behind it isn't sharply outlined.
+
+   @property is needed for animatable custom properties — supported in
+   Chromium (which Electron uses). Without it the angle would jump instead
+   of interpolate. */
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.ds-screen-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99999;
+  background: conic-gradient(
+    from var(--glow-angle, 0deg) at 50% 50%,
+    rgba( 26,  11,  61, 1)   0deg,  /* indigo-purple — deep anchor */
+    rgba(124,  58, 237, 1)  90deg,  /* violet-600 — vibrant mid */
+    rgba(217,  70, 239, 1) 180deg,  /* fuchsia-500 — bright peak */
+    rgba( 76,  29, 149, 1) 270deg,  /* purple-900 — alt deep anchor */
+    rgba( 26,  11,  61, 1) 360deg   /* loop back */
+  );
+  /* Rectangular frame mask. Solid for the first 4px at the very edge then
+     gradient-feathered inward to fully transparent at 28px — gives a crisp,
+     fully-opaque edge line with a soft inner falloff instead of fading from
+     the very first pixel (the user wanted more edge opacity). */
+  -webkit-mask:
+    linear-gradient(to right,
+      rgba(0,0,0,1)    0px,
+      rgba(0,0,0,1)    4px,
+      rgba(0,0,0,0.55) 11px,
+      rgba(0,0,0,0.18) 17px,
+      rgba(0,0,0,0)    23px,
+      rgba(0,0,0,0)    calc(100% - 23px),
+      rgba(0,0,0,0.18) calc(100% - 17px),
+      rgba(0,0,0,0.55) calc(100% - 11px),
+      rgba(0,0,0,1)    calc(100% - 4px),
+      rgba(0,0,0,1)    100%),
+    linear-gradient(to bottom,
+      rgba(0,0,0,1)    0px,
+      rgba(0,0,0,1)    4px,
+      rgba(0,0,0,0.55) 11px,
+      rgba(0,0,0,0.18) 17px,
+      rgba(0,0,0,0)    23px,
+      rgba(0,0,0,0)    calc(100% - 23px),
+      rgba(0,0,0,0.18) calc(100% - 17px),
+      rgba(0,0,0,0.55) calc(100% - 11px),
+      rgba(0,0,0,1)    calc(100% - 4px),
+      rgba(0,0,0,1)    100%);
+          mask:
+    linear-gradient(to right,
+      rgba(0,0,0,1)    0px,
+      rgba(0,0,0,1)    4px,
+      rgba(0,0,0,0.55) 11px,
+      rgba(0,0,0,0.18) 17px,
+      rgba(0,0,0,0)    23px,
+      rgba(0,0,0,0)    calc(100% - 23px),
+      rgba(0,0,0,0.18) calc(100% - 17px),
+      rgba(0,0,0,0.55) calc(100% - 11px),
+      rgba(0,0,0,1)    calc(100% - 4px),
+      rgba(0,0,0,1)    100%),
+    linear-gradient(to bottom,
+      rgba(0,0,0,1)    0px,
+      rgba(0,0,0,1)    4px,
+      rgba(0,0,0,0.55) 11px,
+      rgba(0,0,0,0.18) 17px,
+      rgba(0,0,0,0)    23px,
+      rgba(0,0,0,0)    calc(100% - 23px),
+      rgba(0,0,0,0.18) calc(100% - 17px),
+      rgba(0,0,0,0.55) calc(100% - 11px),
+      rgba(0,0,0,1)    calc(100% - 4px),
+      rgba(0,0,0,1)    100%);
+  /* Blur back but tiny — angle is frozen during fade-out (see keyframes), so
+     the blurred result is cached as a single bitmap on the GPU layer and
+     reused for every frame at different opacities. No per-frame raster cost. */
+  filter: blur(3px);
+  opacity: 0;
+  /* GPU layer promotion + frozen angle = fade-out is a pure alpha blend on
+     a cached bitmap — the cheapest possible compositor op. */
+  transform: translateZ(0);
+  animation: dsScreenGlowPulse 1500ms linear forwards;
+  will-change: opacity, --glow-angle, transform;
+}
+
+@keyframes dsScreenGlowPulse {
+  /* Fade-in — angle rotates during entrance so colors flow. */
+  0%   { opacity: 0;    --glow-angle:   0deg;
+         animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  /* Peak. Angle stops rotating from here on. */
+  30%  { opacity: 1;    --glow-angle: 180deg;
+         animation-timing-function: linear; }
+  /* Hold — short plateau. */
+  40%  { opacity: 1;    --glow-angle: 180deg;
+         animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  /* Fade-out — same cubic-bezier as the fade-in, applied in reverse.
+     This is the mirror curve the user wanted: slow ramp out of the hold
+     (the eye sees the glow gently start to dim), fast middle (most of the
+     visible change), slow landing at zero (no abrupt cut-off). Symmetric
+     with the fade-in so the in and out feel like the same gesture. */
+  100% { opacity: 0;    --glow-angle: 180deg; }
+}
+
 /* ── Panel entrance — smooth, no filter blur (causes jank) ── */
 @keyframes macosPop {
   0% {

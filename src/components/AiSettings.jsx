@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import ConfirmModal from './ConfirmModal';
 import {
   Select,
   Input,
@@ -28,6 +29,7 @@ export default function AiSettings({ settings, update, api }) {
   const [keyDraft, setKeyDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null); // { kind: 'ok'|'err', text }
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
   // Live model catalog (Phase 3 wires `ai:listModels`); falls back to the
   // provider's curated list.
@@ -201,7 +203,7 @@ export default function AiSettings({ settings, update, api }) {
             hasKey ? (
               <>
                 <Badge tone="success">Saved</Badge>
-                <Button variant="danger" size="sm" onClick={handleRemoveKey} disabled={busy}>
+                <Button variant="danger" size="sm" onClick={() => setConfirmRemoveOpen(true)} disabled={busy}>
                   Remove
                 </Button>
               </>
@@ -218,6 +220,7 @@ export default function AiSettings({ settings, update, api }) {
                 onChange={(e) => setKeyDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSaveKey(); }}
                 placeholder={`Paste your ${activeProvider?.label || ''} API key`}
+                flat
               />
               <Button
                 variant="primary"
@@ -245,6 +248,26 @@ export default function AiSettings({ settings, update, api }) {
           </div>
         </SettingRow>
       )}
+
+      <ConfirmModal
+        isOpen={confirmRemoveOpen}
+        title={`Remove ${activeProvider?.label || ''} API key?`}
+        message={
+          <>
+            The encrypted key for{' '}
+            <strong style={{ color: 'var(--ds-text-strong)' }}>{activeProvider?.label || 'this provider'}</strong>
+            {' '}will be deleted from this device. AI features that depend on it will stop
+            working until you paste the key in again.
+          </>
+        }
+        confirmLabel="Remove"
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmRemoveOpen(false);
+          await handleRemoveKey();
+        }}
+        onClose={() => setConfirmRemoveOpen(false)}
+      />
     </>
   );
 }

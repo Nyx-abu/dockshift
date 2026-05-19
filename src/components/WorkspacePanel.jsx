@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
 import SaveWorkspaceModal from './SaveWorkspaceModal';
+import ConfirmModal from './ConfirmModal';
 import { HEADER_STYLE, TITLE_STYLE } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
 import {
@@ -30,14 +31,20 @@ function appLabel(app) {
   return String(app?.processName || 'Unknown').replace(/\.exe$/i, '');
 }
 
-/** A short, de-duplicated preview of the captured apps, e.g. "Code, Chrome +2". */
-function appsPreview(apps) {
-  const names = [...new Set(apps.map(appLabel))];
-  if (names.length === 0) return null;
-  const shown = names.slice(0, 3).join(', ');
-  const extra = names.length - 3;
-  return extra > 0 ? `${shown} +${extra}` : shown;
+/** Dedup apps by executable path, preserving first-seen order. */
+function uniqueApps(apps) {
+  const seen = new Set();
+  const out = [];
+  for (const app of apps) {
+    const key = app?.executablePath;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(app);
+  }
+  return out;
 }
+
+const PREVIEW_ICON_LIMIT = 6;
 
 // ─── Workspace card ──────────────────────────────────────────────────────────
 // Compact by default; expands to reveal exactly what the snapshot captured.
@@ -48,22 +55,29 @@ function WorkspaceCard({ ws, loading, onRestore, onDelete }) {
   // Real OS icon per executablePath, fetched lazily once the card is expanded.
   const [icons, setIcons] = useState({});
   const apps = Array.isArray(ws.apps) ? ws.apps : [];
-  const preview = appsPreview(apps);
+  const unique = uniqueApps(apps);
+  const previewApps = unique.slice(0, PREVIEW_ICON_LIMIT);
+  const extraCount = unique.length - previewApps.length;
+  const previewNames = previewApps.map(appLabel).join(', ');
 
+  // Fetch icons for the preview strip eagerly (always shown); fetch all when
+  // the card is expanded. Both write into the same `icons` state.
   useEffect(() => {
-    if (!expanded) return undefined;
     const api = window.electronAPI;
     let cancelled = false;
-    apps.forEach((app) => {
+    const targets = expanded ? unique : previewApps;
+    targets.forEach((app) => {
       const key = app?.executablePath;
       if (!key) return;
+      // Skip paths we've already requested (icons[key] becomes '' or data URL).
+      if (Object.prototype.hasOwnProperty.call(icons, key)) return;
       api?.invoke?.('app:getIcon', { path: key })
         ?.then((url) => { if (!cancelled) setIcons((prev) => ({ ...prev, [key]: url || '' })); })
         ?.catch(() => {});
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
+  }, [expanded, unique.length]);
 
   return (
     <div
@@ -120,16 +134,54 @@ function WorkspaceCard({ ws, loading, onRestore, onDelete }) {
           }}>
             {apps.length} {apps.length === 1 ? 'app' : 'apps'} · {formatDate(ws.createdAt)}
           </div>
-          {preview && (
-            <div style={{
-              fontSize: 'var(--ds-font-xs)',
-              color: 'var(--ds-text-faint)',
-              marginTop: 1,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
-              {preview}
+          {previewApps.length > 0 && (
+            <div
+              title={previewNames}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 4,
+              }}
+            >
+              {previewApps.map((app, i) => {
+                const key = app.executablePath;
+                const realIcon = icons[key];
+                return (
+                  <span
+                    key={i}
+                    style={{
+                      width: 16,
+                      height: 16,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: 'var(--ds-text-faint)',
+                    }}
+                  >
+                    {realIcon
+                      ? <img
+                          src={realIcon}
+                          alt=""
+                          width={16}
+                          height={16}
+                          onError={() => setIcons((p) => ({ ...p, [key]: '' }))}
+                          style={{ display: 'block', borderRadius: 3 }}
+                        />
+                      : <BoxIcon size={13} />}
+                  </span>
+                );
+              })}
+              {extraCount > 0 && (
+                <span style={{
+                  fontSize: 'var(--ds-font-xs)',
+                  color: 'var(--ds-text-faint)',
+                  marginLeft: 2,
+                }}>
+                  +{extraCount}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -176,7 +228,14 @@ function WorkspaceCard({ ws, loading, onRestore, onDelete }) {
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--ds-space-2)' }}>
                 <span style={{ color: 'var(--ds-text-faint)', display: 'inline-flex', marginTop: 1, flexShrink: 0 }}>
                   {realIcon
-                    ? <img src={realIcon} alt="" width={15} height={15} style={{ display: 'block', borderRadius: 3 }} />
+                    ? <img
+                        src={realIcon}
+                        alt=""
+                        width={15}
+                        height={15}
+                        onError={() => setIcons((prev) => ({ ...prev, [app.executablePath]: '' }))}
+                        style={{ display: 'block', borderRadius: 3 }}
+                      />
                     : <BoxIcon size={13} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -217,6 +276,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const api = useMemo(() => window.electronAPI, []);
 
@@ -357,7 +417,7 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
               ws={ws}
               loading={loading}
               onRestore={handleRestore}
-              onDelete={handleDelete}
+              onDelete={(name) => setPendingDelete(name)}
             />
           ))
         )}
@@ -372,6 +432,24 @@ export default function WorkspacePanel({ isOpen, onClose, anchorRect }) {
         isOpen={saveModalOpen}
         onSave={handleSave}
         onClose={() => setSaveModalOpen(false)}
+      />
+      <ConfirmModal
+        isOpen={!!pendingDelete}
+        title="Delete this workspace?"
+        message={pendingDelete && (
+          <>
+            <strong style={{ color: 'var(--ds-text-strong)' }}>{pendingDelete}</strong>
+            {' '}will be permanently removed. Open apps stay running; only the saved snapshot is deleted.
+          </>
+        )}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => {
+          const name = pendingDelete;
+          setPendingDelete(null);
+          await handleDelete(name);
+        }}
+        onClose={() => setPendingDelete(null)}
       />
     </>
   );

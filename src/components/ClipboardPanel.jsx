@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { HEADER_STYLE, TITLE_STYLE, SCROLL_AREA } from '../hooks/usePanelPosition';
 import ResizablePanel from './ResizablePanel';
+import ConfirmModal from './ConfirmModal';
 import {
   Button,
   IconButton,
-  Select,
+  Input,
   XIcon,
   CopyIcon,
   TrashIcon,
   CheckIcon,
   ClipboardIcon,
   FileIcon,
+  SearchIcon,
 } from './ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -35,7 +37,7 @@ function dateLabel(iso) {
   } catch { return ''; }
 }
 
-const TYPE_LABELS = { text: 'Text', image: 'Image', file: 'File', link: 'Link', color: 'Color' };
+const TYPE_LABELS = { text: 'Text', image: 'Image', file: 'File', link: 'Link', color: 'Color', code: 'Code' };
 // Category accent colors for the type badge — functional colour-coding, kept
 // as a small fixed palette.
 const TYPE_COLORS = {
@@ -44,6 +46,7 @@ const TYPE_COLORS = {
   file: 'var(--ds-warning)',
   link: 'var(--ds-success)',
   color: 'var(--ds-danger)',
+  code: 'var(--ds-accent-purple)',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -64,6 +67,60 @@ function TypeBadge({ type }) {
     }}>
       {TYPE_LABELS[type] || type}
     </span>
+  );
+}
+
+function FilterChip({ label, color, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontSize: 'var(--ds-font-xs)',
+        fontWeight: 'var(--ds-weight-semibold)',
+        padding: '2px 8px',
+        borderRadius: 'var(--ds-radius-sm)',
+        border: `1px solid ${active ? color : 'var(--ds-border)'}`,
+        background: active ? `color-mix(in srgb, ${color} 14%, transparent)` : 'transparent',
+        color: active ? color : 'var(--ds-text-muted)',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        fontFamily: 'inherit',
+        transition: 'background var(--ds-dur-fast) var(--ds-ease), border-color var(--ds-dur-fast) var(--ds-ease), color var(--ds-dur-fast) var(--ds-ease)',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterChips({ value, onChange }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 6,
+      padding: '6px 0 2px',
+      WebkitAppRegion: 'no-drag',
+    }}>
+      <FilterChip
+        label="All"
+        color="var(--ds-text-primary)"
+        active={value === 'all'}
+        onClick={() => onChange('all')}
+      />
+      {Object.keys(TYPE_LABELS).map((t) => (
+        <FilterChip
+          key={t}
+          label={TYPE_LABELS[t]}
+          color={TYPE_COLORS[t]}
+          active={value === t}
+          onClick={() => onChange(t)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -236,6 +293,26 @@ function ItemRow({ item, onCopy, onDelete, onPreviewImage }) {
             {item.content}
           </p>
         )}
+        {item.type === 'code' && (
+          <pre style={{
+            margin: 0,
+            fontFamily: "'Cascadia Code', 'Consolas', monospace",
+            fontSize: 'var(--ds-font-xs)',
+            color: 'var(--ds-text-secondary)',
+            background: 'var(--ds-bg-control)',
+            border: '1px solid var(--ds-border-subtle)',
+            borderRadius: 'var(--ds-radius-sm)',
+            padding: '6px 8px',
+            whiteSpace: 'pre',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+          }}>
+            {item.content}
+          </pre>
+        )}
       </div>
     </div>
   );
@@ -273,20 +350,13 @@ function ImageOverlay({ src, onClose }) {
 
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
-const FILTERS = [
-  { value: 'all', label: 'All Types' },
-  { value: 'text', label: 'Text' },
-  { value: 'image', label: 'Images' },
-  { value: 'file', label: 'Files' },
-  { value: 'link', label: 'Links' },
-  { value: 'color', label: 'Colors' },
-];
-
 export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const panelRef = useRef(null);
   const api = useMemo(() => window.electronAPI, []);
 
@@ -326,7 +396,20 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
 
   if (!isOpen || !anchorRect) return null;
 
-  const filtered = filter === 'all' ? items : items.filter((i) => i.type === filter);
+  const q = search.trim().toLowerCase();
+  const filtered = items.filter((i) => {
+    if (filter !== 'all' && i.type !== filter) return false;
+    if (!q) return true;
+    // Search content for text/code/link/color; for files, search every path;
+    // for images, search the filename portion of the on-disk path.
+    if (i.type === 'file' && Array.isArray(i.paths)) {
+      return i.paths.some((p) => typeof p === 'string' && p.toLowerCase().includes(q));
+    }
+    if (i.type === 'image' && typeof i.content === 'string') {
+      return i.content.toLowerCase().includes(q);
+    }
+    return typeof i.content === 'string' && i.content.toLowerCase().includes(q);
+  });
 
   // Group by date label
   const groups = [];
@@ -342,20 +425,26 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
       {/* ── Header ── */}
       <div style={HEADER_STYLE}>
         <span style={TITLE_STYLE}>Clipboard History</span>
-        <Select
-          value={filter}
-          onChange={setFilter}
-          options={FILTERS}
-          size="sm"
-          style={{ width: 110 }}
-        />
         {items.length > 0 && (
-          <Button variant="danger" size="sm" onClick={handleClear}>Clear All</Button>
+          <Button variant="danger" size="sm" onClick={() => setConfirmClearOpen(true)}>Clear All</Button>
         )}
         <IconButton variant="danger" title="Close" onClick={onClose}>
           <XIcon size={14} />
         </IconButton>
       </div>
+
+      {/* ── Filter chips ── */}
+      <FilterChips value={filter} onChange={setFilter} />
+
+      {/* ── Search ── */}
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search clipboard…"
+        icon={<SearchIcon size={14} />}
+        size="sm"
+        flat
+      />
 
       {/* ── Scrollable list ── */}
       <div style={{ ...SCROLL_AREA, flexDirection: 'column', gap: 'var(--ds-space-1)', paddingRight: 4 }}>
@@ -371,7 +460,9 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
               <ClipboardIcon size={26} />
             </div>
             <p style={{ color: 'var(--ds-text-dim)', fontSize: 'var(--ds-font-sm)', margin: 0 }}>
-              {filter === 'all' ? 'Nothing copied yet.' : `No ${filter} items in history.`}
+              {q ? `No matches for "${search.trim()}".`
+                : filter === 'all' ? 'Nothing copied yet.'
+                : `No ${filter} items in history.`}
             </p>
           </div>
         )}
@@ -409,6 +500,15 @@ export default function ClipboardPanel({ isOpen, onClose, anchorRect }) {
     <>
       {panel}
       {previewImage && <ImageOverlay src={previewImage} onClose={() => setPreviewImage(null)} />}
+      <ConfirmModal
+        isOpen={confirmClearOpen}
+        title="Clear all clipboard history?"
+        message={`This will delete all ${items.length} item${items.length === 1 ? '' : 's'} — including images and files. This can't be undone.`}
+        confirmLabel="Clear All"
+        variant="danger"
+        onConfirm={() => { handleClear(); setConfirmClearOpen(false); }}
+        onClose={() => setConfirmClearOpen(false)}
+      />
     </>,
     document.body
   );

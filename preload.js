@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'dock:applyLayout',
       'dock:setExpanded',
       'dock:setMouseIgnore',
+      'dock:activate',
+      'dock:deactivate',
       'dock:layout:get',
       'dock:layout:save',
       // Notes
@@ -81,6 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'launcher:search',
       'launcher:open',
       'app:getIcon',
+      // Welcome / first-run
+      'welcome:complete',
       // Terminal
       'terminal:spawn',
       'terminal:ensure',
@@ -93,6 +97,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'browser:saveBookmark',
       'browser:getHistory',
       'browser:addHistory',
+      // Windows shell integration (context menu)
+      'shell:rendererReady',
+      'shell:integrationStatus',
+      'shell:install',
+      'shell:uninstall',
     ];
     if (allowed.includes(channel)) {
       return ipcRenderer.invoke(channel, data);

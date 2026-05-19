@@ -89,6 +89,9 @@
   --ds-accent-bg: rgba(110, 125, 255, 0.15);
   --ds-accent-bg-soft: rgba(110, 125, 255, 0.08);
   --ds-accent-border: rgba(110, 125, 255, 0.25);
+  /* Purple — used for the clipboard "code" badge. Light-pale variant for
+     dark mode (good contrast on dark panels). Light mode redefines this. */
+  --ds-accent-purple: #b388ff;
 
   /* Status */
   --ds-danger: #ff6b6b;
@@ -121,36 +124,46 @@
   --ds-bg-hover: rgba(0, 0, 0, 0.06);
   --ds-bg-tooltip: rgba(33, 35, 42, 0.96);
 
-  /* Text */
+  /* Text — alphas bumped from the original 0.82/0.58/0.42/0.30 to clear
+     WCAG AA contrast against the near-white panel bg. Previously muted text
+     (0.58) sat at 4.23:1 — below AA's 4.5, so any non-decorative body label
+     using it failed. Faint icons/captions (0.42) were 2.59:1, below even AA
+     UI's 3:1 minimum. Dim placeholder text (0.30) was 1.94:1, essentially
+     illegible. The new values still produce a visible hierarchy. */
   --ds-text-strong: #1a1c24;
   --ds-text-primary: #1a1c24;
-  --ds-text-secondary: rgba(26, 28, 36, 0.82);
-  --ds-text-muted: rgba(26, 28, 36, 0.58);
-  --ds-text-faint: rgba(26, 28, 36, 0.42);
-  --ds-text-dim: rgba(26, 28, 36, 0.3);
+  --ds-text-secondary: rgba(26, 28, 36, 0.82);  /* 9.2:1  — unchanged */
+  --ds-text-muted:    rgba(26, 28, 36, 0.66);   /* ~4.8:1 — was 0.58 (4.2:1) */
+  --ds-text-faint:    rgba(26, 28, 36, 0.55);   /* ~3.4:1 — was 0.42 (2.6:1) */
+  --ds-text-dim:      rgba(26, 28, 36, 0.42);   /* ~2.5:1 — was 0.30 (1.9:1) */
 
   /* Borders */
   --ds-border: rgba(0, 0, 0, 0.1);
   --ds-border-subtle: rgba(0, 0, 0, 0.06);
   --ds-border-strong: rgba(0, 0, 0, 0.16);
 
-  /* Accent (indigo / cyan) — nudged darker for contrast on light */
+  /* Accent (indigo / cyan) — cyan darkened for AA text contrast. */
   --ds-accent: #5562e8;
   --ds-accent-light: #5562e8;
-  --ds-accent-cyan: #2092cf;
+  --ds-accent-cyan: #1976a6;           /* was #2092cf (3.3:1) → 4.7:1 */
   --ds-accent-bg: rgba(85, 98, 232, 0.12);
   --ds-accent-bg-soft: rgba(85, 98, 232, 0.07);
   --ds-accent-border: rgba(85, 98, 232, 0.3);
+  /* Purple for the clipboard "code" badge. Dark mode uses #b388ff which is
+     too pale (2.5:1) on the light panel — this dedicated token gives both
+     themes a contrast-correct variant. */
+  --ds-accent-purple: #6b21a8;         /* 5.5:1 on light panel */
 
-  /* Status */
-  --ds-danger: #e5484d;
-  --ds-danger-text: #cf2c31;
+  /* Status — saturated brand hues darkened to clear AA text contrast.
+     Previous warning (#c98a00) failed even the 3:1 UI minimum (2.85:1). */
+  --ds-danger: #c41a1f;                /* was #e5484d (3.7:1) → 5.7:1 */
+  --ds-danger-text: #a8141a;
   --ds-danger-bg: rgba(229, 72, 77, 0.12);
   --ds-danger-border: rgba(229, 72, 77, 0.32);
-  --ds-success: #2a9d4e;
+  --ds-success: #1a7a3a;               /* was #2a9d4e (3.3:1) → 5.2:1 */
   --ds-success-bg: rgba(42, 157, 78, 0.12);
   --ds-success-border: rgba(42, 157, 78, 0.25);
-  --ds-warning: #c98a00;
+  --ds-warning: #8a5d00;               /* was #c98a00 (2.85:1) → 5.5:1 */
 
   /* Effects */
   --ds-shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08);

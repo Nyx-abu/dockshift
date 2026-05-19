@@ -51,6 +51,22 @@ public class Win32 {
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
+  // Extended window styles — needed to filter tool/overlay windows.
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+  public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+  [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+  public static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+  public static long GetWindowLong(IntPtr hWnd, int nIndex) {
+    if (IntPtr.Size == 8) return GetWindowLongPtr64(hWnd, nIndex).ToInt64();
+    return (long)GetWindowLong32(hWnd, nIndex);
+  }
+
+  // DwmGetWindowAttribute — needed to detect "cloaked" windows (UWP host
+  // frames like ApplicationFrameHost that pass IsWindowVisible but the user
+  // can't actually see them).
+  [DllImport("dwmapi.dll")]
+  public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
   // Process APIs for accurate executable path resolution
   [DllImport("kernel32.dll", SetLastError = true)]
   public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
@@ -63,11 +79,43 @@ public class Win32 {
 }
 "@
 
+# Win32 constants
+$GWL_EXSTYLE      = -20
+$WS_EX_TOOLWINDOW = 0x00000080
+$WS_EX_APPWINDOW  = 0x00040000
+$DWMWA_CLOAKED    = 14
+
+# Processes that have visible top-level windows but aren't real user apps:
+# UWP host frames, IME/input hosts, audio/GPU tray overlays, shell helpers.
+# Lowercase, matched against the process name (sans .exe).
+$blocklist = @(
+  'applicationframehost', 'textinputhost', 'systemsettings',
+  'startmenuexperiencehost', 'shellexperiencehost', 'searchhost',
+  'searchui', 'lockapp', 'runtimebroker', 'sechealthui',
+  'widgetservice', 'crashhandler', 'crashpad_handler',
+  'nvidia overlay', 'nahimic3', 'logioptionsplus_agent'
+)
+
 $results = New-Object System.Collections.Generic.List[Object]
 $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
 [Win32]::EnumWindows({
   param([IntPtr]$hWnd, [IntPtr]$lParam)
   if (-not [Win32]::IsWindowVisible($hWnd)) { return $true }
+
+  # Cloaked check: DWM marks UWP host frames as cloaked. IsWindowVisible
+  # returns true for them but the user never sees them. Excluding catches
+  # ApplicationFrameHost, TextInputHost, and similar invisible parents.
+  [int]$cloaked = 0
+  [void][Win32]::DwmGetWindowAttribute($hWnd, $DWMWA_CLOAKED, [ref]$cloaked, 4)
+  if ($cloaked -ne 0) { return $true }
+
+  # Tool-window check: WS_EX_TOOLWINDOW means "floating utility, not for
+  # alt-tab" — overlays, tray menus, NVIDIA HUD, etc. Skip unless the window
+  # also sets WS_EX_APPWINDOW (rare but explicit "I am a real app" opt-in).
+  $ex = [Win32]::GetWindowLong($hWnd, $GWL_EXSTYLE)
+  if ((($ex -band $WS_EX_TOOLWINDOW) -ne 0) -and (($ex -band $WS_EX_APPWINDOW) -eq 0)) {
+    return $true
+  }
 
   $len = [Win32]::GetWindowTextLength($hWnd)
   if ($len -le 0) { return $true }
@@ -88,6 +136,12 @@ $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
 
   $rect = New-Object Win32+RECT
   [void][Win32]::GetWindowRect($hWnd, [ref]$rect)
+
+  # Skip windows that are absurdly small — likely off-screen helpers, not real
+  # alt-tab apps (real apps render at least a captionbar's worth of pixels).
+  $w = $rect.Right - $rect.Left
+  $h = $rect.Bottom - $rect.Top
+  if ($w -lt 100 -or $h -lt 80) { return $true }
 
   $exePath = $null
   $pname = $null
@@ -119,6 +173,7 @@ $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
   # Skip processes we don't want to track
   if (-not $exePath) { return $true }
   $lowerExe = $exePath.ToLowerInvariant()
+  $lowerName = if ($pname) { $pname.ToLowerInvariant() } else { '' }
 
   # Skip this Electron app and dev tooling:
   if ($lowerExe -like '*\\node.exe' -or
@@ -133,6 +188,10 @@ $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
     return $true
   }
 
+  # Process name blocklist for well-known background hosts that slip past
+  # the cloaked/tool-window filters above (some shell helpers fly under both).
+  if ($blocklist -contains $lowerName) { return $true }
+
   $results.Add([pscustomobject]@{
     hwnd = $hWnd.ToInt64()
     pid = [int]$pidOut
@@ -142,8 +201,8 @@ $seenPids = New-Object System.Collections.Generic.HashSet[uint32]
     bounds = [pscustomobject]@{
       x = $rect.Left
       y = $rect.Top
-      width = ($rect.Right - $rect.Left)
-      height = ($rect.Bottom - $rect.Top)
+      width = $w
+      height = $h
     }
   }) | Out-Null
   return $true

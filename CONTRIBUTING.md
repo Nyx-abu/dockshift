@@ -38,7 +38,7 @@ npm run dist:dir       # unpacked build, faster for local testing
 
 ## Architecture notes
 
-Read [`CLAUDE.md`](CLAUDE.md) for the full architecture overview. The two things that trip up
+Read [`AGENTS.md`](AGENTS.md) for the full architecture overview. The two things that trip up
 most new contributors:
 
 1. **Renderer changes hot-reload; main-process changes do not.** After editing
@@ -47,6 +47,25 @@ most new contributors:
 2. **Adding an IPC channel requires changes in three places.** `ipcMain.handle()` in
    `electron-main.js`, the allowlist array in `preload.js`, and the renderer call site.
    Channels not on the `preload.js` allowlist are **silently dropped**.
+
+## Working with AI coding agents
+
+DockShift ships ready-to-use context files for the most common coding agents so you don't
+have to re-explain the architecture every session.
+
+- **`AGENTS.md`** (repo root) is the canonical context. Codex CLI, Cline, Aider, Continue,
+  and most other modern agents read it natively.
+- **`CLAUDE.md`** — Claude Code (imports `AGENTS.md`, adds slash commands + an IPC-sync hook)
+- **`.cursor/rules/dockshift.mdc`** — Cursor
+- **`.github/copilot-instructions.md`** — GitHub Copilot (auto-loaded in VS Code & github.com)
+- **`.windsurfrules`** — Windsurf
+
+If you're using a different agent, point it at `AGENTS.md` manually.
+
+Maintainers using Claude Code also have these slash commands available
+(see `.claude/commands/`): `/add-ipc`, `/new-panel`, `/verify-build`, `/release`.
+The PostToolUse hook in `.claude/settings.json` warns when an IPC channel handled in
+`electron-main.js` is missing from the `preload.js` allowlist.
 
 ## Code style
 

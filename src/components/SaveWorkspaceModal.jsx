@@ -11,6 +11,9 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
     const trimmed = name.trim();
     if (!trimmed) return;
     if (onSave) onSave(trimmed);
+    // Brief Copilot-style edge glow as visual confirmation. App.jsx mounts
+    // <ScreenGlow /> which listens for this event and runs the 900ms anim.
+    window.dispatchEvent(new CustomEvent('dockshift:screen-glow'));
   };
 
   useEffect(() => {
@@ -122,6 +125,7 @@ export default function SaveWorkspaceModal({ isOpen, initialName = '', onSave, o
             placeholder="e.g. Deep Focus, Coding Session"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            flat
           />
         </div>
 

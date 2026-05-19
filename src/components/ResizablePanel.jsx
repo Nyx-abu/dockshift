@@ -56,12 +56,39 @@ export default function ResizablePanel({
     }
   };
 
+  // The panel is position: fixed anchored at its top-left corner. re-resizable
+  // only changes width/height — when the user drags the top or left handle,
+  // the *opposite* edge visually moves because top/left stays put. Track the
+  // start position and translate the delta into a top/left adjustment so the
+  // dragged edge actually follows the cursor.
+  const resizeStart = useRef({ top: 0, left: 0 });
+
+  const onResizeStart = () => {
+    const el = panelRef.current;
+    if (!el) return;
+    resizeStart.current = {
+      top: parseFloat(el.style.top) || el.getBoundingClientRect().top,
+      left: parseFloat(el.style.left) || el.getBoundingClientRect().left,
+    };
+  };
+
+  const onResize = (_e, direction, _ref, delta) => {
+    const el = panelRef.current;
+    if (!el) return;
+    const movesTop = direction === 'top' || direction === 'topLeft' || direction === 'topRight';
+    const movesLeft = direction === 'left' || direction === 'topLeft' || direction === 'bottomLeft';
+    if (movesTop) el.style.top = `${resizeStart.current.top - delta.height}px`;
+    if (movesLeft) el.style.left = `${resizeStart.current.left - delta.width}px`;
+  };
+
   return (
     <Resizable
       ref={handleRef}
       defaultSize={{ width, height }}
       minWidth={resolvedMinWidth}
       minHeight={resolvedMinHeight}
+      onResizeStart={onResizeStart}
+      onResize={onResize}
       style={{
         ...PANEL_BASE_STYLE,
         display: isOpen ? 'flex' : 'none',
