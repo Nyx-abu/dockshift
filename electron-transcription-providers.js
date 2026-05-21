@@ -125,6 +125,49 @@ function normalizeLanguage(language, format) {
 /* ─── Provider definitions ──────────────────────────────────────────────── */
 
 /**
+ * On-device speech recognition powered by Vosk (WASM in a Web Worker). Runs
+ * entirely in the renderer — once the small English model has been downloaded
+ * to the user's profile, audio never leaves the device and no network is used.
+ *
+ * Special "client-side" provider: the main-process `transcribe()` below is
+ * unreachable on the happy path — VoicePanel detects `clientSide: true` and
+ * drives the recognizer directly. The function exists only so accidental
+ * routing or generic probes fail with a clear, user-readable error.
+ */
+const voskOffline = {
+  id: 'vosk-offline',
+  label: 'On-device (offline)',
+  keyName: null,
+  keyless: true,
+  clientSide: true,
+  description: 'Runs entirely on your computer. No internet, no API key, no audio uploaded.',
+  setupHint: 'A small speech model (~40 MB) downloads the first time you use it. After that, voice works offline.',
+  docsUrl: null,
+  defaultEndpoint: '',
+  supportsCustomEndpoint: false,
+  supportedAudioMimes: [], // unused — renderer streams the mic directly into Vosk
+  languageHintFormat: 'bcp-47',
+  capabilities: {
+    autoDetectLanguage: false, // The current model is English-only
+    streaming: true,           // Delivers interim + final results live
+    multilingual: false,
+    timestamps: false,
+    diarization: false,
+  },
+
+  async transcribe() {
+    throw new TranscriptionError(
+      'On-device speech runs in the Voice panel itself, not as a background transcription job.',
+      'capability',
+    );
+  },
+
+  async testConnection() {
+    return { ok: true, info: 'On-device — no network credentials to test.' };
+  },
+};
+
+/**
  * OpenAI Whisper — the most widely used managed transcription API.
  * Endpoint is OpenAI-compatible, which is why Groq and many local stacks
  * (e.g. `whisper.cpp` server, `faster-whisper-server`) use the same shape;
@@ -754,6 +797,7 @@ const customCompat = {
 /* ─── Registry ──────────────────────────────────────────────────────────── */
 
 export const TRANSCRIPTION_PROVIDERS = {
+  [voskOffline.id]: voskOffline,
   [openaiWhisper.id]: openaiWhisper,
   [groqWhisper.id]: groqWhisper,
   [deepgram.id]: deepgram,
@@ -764,8 +808,12 @@ export const TRANSCRIPTION_PROVIDERS = {
   [customCompat.id]: customCompat,
 };
 
-/** Default provider id when settings.sttProvider is unset. */
-export const DEFAULT_TRANSCRIPTION_PROVIDER_ID = openaiWhisper.id;
+/**
+ * Default provider id when settings.sttProvider is unset. On-device speech is
+ * the only option that works with no setup and no API key, so new installs
+ * land there. The renderer prompts for the one-time model download.
+ */
+export const DEFAULT_TRANSCRIPTION_PROVIDER_ID = voskOffline.id;
 
 /** Catalog shape sent to the renderer — never includes runtime functions. */
 export const TRANSCRIPTION_PROVIDER_LIST = Object.values(TRANSCRIPTION_PROVIDERS).map((p) => ({
@@ -773,7 +821,13 @@ export const TRANSCRIPTION_PROVIDER_LIST = Object.values(TRANSCRIPTION_PROVIDERS
   label: p.label,
   keyName: p.keyName,
   keyless: p.keyless,
+  // `clientSide: true` tells the renderer to handle transcription locally
+  // (e.g. Windows Speech via SpeechRecognition) instead of recording audio
+  // and posting it to main. Any provider without this stays on the
+  // MediaRecorder → IPC → main path.
+  clientSide: !!p.clientSide,
   description: p.description,
+  setupHint: p.setupHint || null,
   docsUrl: p.docsUrl || null,
   defaultEndpoint: p.defaultEndpoint || '',
   supportsCustomEndpoint: !!p.supportsCustomEndpoint,
