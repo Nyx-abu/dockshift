@@ -13,24 +13,12 @@
       "Bash(node --check electron-transcription-providers.js)",
       "WebFetch(domain:www.npmjs.com)",
       "Bash(npm install *)",
-      "Bash(taskkill /F /IM electron.exe /T)",
-      "Bash(taskkill /F /IM node.exe /FI \"WINDOWTITLE eq concurrently*\")",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\fc32a196-e45c-4d4e-a809-aea3650e23b8\\\\tasks\\\\bdgvzc2xr.output' -Wait | Select-String -Pattern 'ready in|Local:|VITE|error|ERR|Electron|failed|EADDRINUSE'\")",
-      "PowerShell(Get-NetTCPConnection *)",
-      "PowerShell(Get-Process *https://bsvccsqpcisujvljtyyh.supabase.co)",
-      "PowerShell(Get-Process *)",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\fc32a196-e45c-4d4e-a809-aea3650e23b8\\\\tasks\\\\bru281u8c.output' -Wait | Select-String -Pattern 'ready in|Local:|VITE|error|ERR|failed|EADDRINUSE|exited with code'\")",
-      "PowerShell(Stop-Process *)",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\fc32a196-e45c-4d4e-a809-aea3650e23b8\\\\tasks\\\\b0vzjl0tb.output' -Wait | Select-String -Pattern 'error|ERR|failed|EADDRINUSE|exited|warning|launch|ready|loaded|window|userData|cache'\")",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\fc32a196-e45c-4d4e-a809-aea3650e23b8\\\\tasks\\\\b86pcumsi.output' -Wait | Select-String -Pattern 'error|ERR|failed|exited|AI:|launchOnStartup'\")",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\fc32a196-e45c-4d4e-a809-aea3650e23b8\\\\tasks\\\\b1wpkgm66.output' -Wait | Select-String -Pattern 'ready in|Local:|VITE|error|ERR|failed|EADDRINUSE|exited|launchOnStartup'\")",
       "Bash(git check-ignore *)",
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git fetch *)",
-      "Bash(git merge *)",
-      "Bash(powershell -NoProfile -Command \"Get-Content -Path 'C:\\\\Users\\\\shoto\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--dockshift\\\\525132b1-af79-402d-8c3c-84de537311c6\\\\tasks\\\\b2j6i1bsl.output' -Wait -Tail 0 | Select-String -Pattern 'ready in|Local:|error|Error|ERROR|exited|fail|FATAL|EADDRINUSE|cannot|Cannot'\")"
+      "Bash(git merge *)"
     ]
   }
 }
